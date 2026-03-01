@@ -1,0 +1,481 @@
+You are a senior staff engineer. Build a production-grade multi-tenant community marketplace SaaS platform with strict RBAC, lifecycle safeguards, and full governance logic. This system must handle ALL lifecycle transitions, integrity protections, and edge cases explicitly defined below. Do not simplify logic. Do not generate demo code.
+
+Use clean architecture, modular structure, and production-grade practices.
+
+==================================================
+TECH STACK
+==================================================
+
+Frontend:
+- React 18
+- TypeScript
+- Vite
+- TailwindCSS
+- shadcn/ui
+- React Query
+- Zustand
+- React Router v6
+- Lucide Icons
+- Framer Motion
+
+Backend:
+- NestJS (Node.js)
+- Prisma ORM
+- PostgreSQL
+- JWT authentication
+- Socket.io realtime
+- Redis (optional abstraction ready)
+
+Database:
+- PostgreSQL
+- UUID primary keys
+- Strict foreign keys
+- Version fields for optimistic concurrency control
+
+==================================================
+ROLE SYSTEM
+==================================================
+
+Roles enum:
+
+RESIDENT
+COMMUNITY_MANAGER
+ADMIN
+
+Hierarchy:
+
+ADMIN > COMMUNITY_MANAGER > RESIDENT
+
+Enforce strict hierarchy.
+
+CRITICAL INVARIANTS:
+
+- System must always have ≥ 1 ADMIN
+- Prevent removal or demotion of last ADMIN
+- Community must always have ≥ 1 COMMUNITY_MANAGER
+- Prevent removal of last COMMUNITY_MANAGER unless replacement assigned
+
+==================================================
+USER MODEL
+==================================================
+
+User fields:
+
+id UUID PK
+full_name
+email UNIQUE
+phone UNIQUE
+password_hash
+role ENUM
+status ENUM
+community_id FK
+is_seller BOOLEAN
+seller_display_name
+seller_description
+profile_photo BYTEA
+created_at
+updated_at
+version INTEGER (for optimistic locking)
+
+User status enum:
+
+ACTIVE
+PENDING
+SUSPENDED
+REMOVED
+
+ACCESS RULE:
+
+Only ACTIVE users may access platform.
+
+==================================================
+COMMUNITY MODEL
+==================================================
+
+Community fields:
+
+id UUID PK
+name
+visibility ENUM
+status ENUM
+created_by FK
+owner_id FK
+created_at
+version INTEGER
+
+visibility enum:
+
+PUBLIC
+PRIVATE
+
+status enum:
+
+ACTIVE
+DISABLED
+
+==================================================
+COMMUNITY JOIN LOGIC
+==================================================
+
+If user joins PUBLIC community:
+
+user.status = ACTIVE
+
+If user joins PRIVATE community:
+
+user.status = PENDING
+
+Approval required from:
+
+COMMUNITY_MANAGER of that community OR ADMIN
+
+==================================================
+COMMUNITY STATUS EDGE CASE HANDLING
+==================================================
+
+If community.status changes to DISABLED:
+
+Execute:
+
+- Block login for all community users
+- Set all community listings.status = INACTIVE
+
+If community reactivated:
+
+- listings remain INACTIVE until manually activated
+
+==================================================
+SELLER MODE EDGE CASE HANDLING
+==================================================
+
+User field:
+
+is_seller BOOLEAN
+
+If is_seller changes TRUE → FALSE:
+
+Execute transaction:
+
+UPDATE listings
+SET status = INACTIVE
+WHERE seller_id = user.id
+
+==================================================
+LISTING MODEL
+==================================================
+
+Listing fields:
+
+id UUID PK
+title
+description
+price
+seller_id FK
+community_id FK
+seller_name_snapshot
+community_name_snapshot
+visibility ENUM
+status ENUM
+created_at
+version INTEGER
+
+visibility enum:
+
+GLOBAL
+COMMUNITY_ONLY
+
+status enum:
+
+ACTIVE
+INACTIVE
+REMOVED
+
+Snapshot fields must capture values at creation time.
+
+==================================================
+GLOBAL VISIBILITY INHERITANCE RULE
+==================================================
+
+Visibility MUST be automatically derived.
+
+Rule:
+
+If community.visibility = PUBLIC
+
+listing.visibility = GLOBAL
+
+If community.visibility = PRIVATE
+
+listing.visibility = COMMUNITY_ONLY
+
+Seller cannot override visibility manually.
+
+==================================================
+COMMUNITY VISIBILITY CHANGE EDGE CASE
+==================================================
+
+If community.visibility changes PUBLIC → PRIVATE:
+
+Execute transaction:
+
+UPDATE listings
+SET visibility = COMMUNITY_ONLY
+WHERE community_id = community.id
+
+If PRIVATE → PUBLIC:
+
+UPDATE listings
+SET visibility = GLOBAL
+WHERE community_id = community.id
+
+==================================================
+USER REMOVAL EDGE CASE HANDLING
+==================================================
+
+If user.status changes to REMOVED or SUSPENDED:
+
+Execute:
+
+UPDATE listings
+SET status = INACTIVE
+WHERE seller_id = user.id
+
+Bookings must remain intact.
+
+==================================================
+COMMUNITY MANAGER REMOVAL EDGE CASE
+==================================================
+
+Before removing COMMUNITY_MANAGER:
+
+Check:
+
+SELECT COUNT(*) FROM users
+WHERE role = COMMUNITY_MANAGER
+AND community_id = target.community_id
+
+If count = 1:
+
+Reject removal unless replacement assigned.
+
+==================================================
+ADMIN REMOVAL EDGE CASE
+==================================================
+
+Before demoting or removing ADMIN:
+
+Check:
+
+SELECT COUNT(*) FROM users WHERE role = ADMIN
+
+If count = 1:
+
+Reject operation.
+
+==================================================
+BOOKING INTEGRITY EDGE CASE
+==================================================
+
+Existing bookings must remain valid even if:
+
+- seller removed
+- seller suspended
+- seller disables seller mode
+
+Prevent new bookings only.
+
+==================================================
+COMMUNITY TRANSFER EDGE CASE
+==================================================
+
+If user.community_id changes:
+
+Execute:
+
+UPDATE listings
+SET community_id = new_community_id
+
+Then recalculate visibility based on community.visibility
+
+==================================================
+CONCURRENCY CONTROL (CRITICAL)
+==================================================
+
+All mutable entities must include:
+
+version INTEGER
+
+Updates must include optimistic locking:
+
+WHERE id = ? AND version = ?
+
+Increment version after update.
+
+Reject conflicting concurrent writes.
+
+==================================================
+SOFT DELETE POLICY
+==================================================
+
+Never hard delete:
+
+users
+communities
+listings
+
+Use status fields instead.
+
+==================================================
+AUDIT LOG SYSTEM
+==================================================
+
+Create audit_logs table:
+
+id UUID
+actor_id
+action
+target_type
+target_id
+timestamp
+
+Log all:
+
+role changes
+community changes
+user removals
+listing removals
+
+Audit logs immutable.
+
+==================================================
+AUTH SYSTEM
+==================================================
+
+JWT authentication.
+
+Endpoints:
+
+POST /auth/register
+POST /auth/login
+GET /auth/me
+
+Use bcrypt hashing.
+
+==================================================
+RBAC ENFORCEMENT
+==================================================
+
+Implement guards:
+
+AdminGuard
+CommunityManagerGuard
+ResidentGuard
+
+CommunityManagerGuard must enforce community scope isolation.
+
+==================================================
+REALTIME EVENTS
+==================================================
+
+Use Socket.io.
+
+Emit events:
+
+user_created
+user_approved
+listing_created
+community_updated
+
+==================================================
+FRONTEND REQUIREMENTS
+==================================================
+
+Use modern SaaS layout:
+
+Sidebar
+Topbar
+Content area
+
+Pages required:
+
+Login
+Register
+Dashboard
+Community Marketplace
+Global Marketplace
+Seller Listings
+Community Manager Dashboard
+Admin Dashboard
+
+Use shadcn/ui components.
+
+Use React Query for server state.
+
+Use Zustand for auth state.
+
+==================================================
+DATABASE IMPLEMENTATION
+==================================================
+
+Use Prisma.
+
+Define models:
+
+User
+Community
+Listing
+AuditLog
+
+Use enums.
+
+Use UUID PKs.
+
+Use foreign keys.
+
+Use indexes.
+
+==================================================
+PROJECT STRUCTURE
+==================================================
+
+frontend/
+backend/
+
+backend:
+NestJS + Prisma
+
+frontend:
+React + Vite + Tailwind + shadcn/ui
+
+==================================================
+IMPLEMENTATION ORDER
+==================================================
+
+Phase 1:
+Prisma schema
+
+Phase 2:
+NestJS modules
+
+Phase 3:
+Auth
+
+Phase 4:
+RBAC guards
+
+Phase 5:
+Marketplace logic
+
+Phase 6:
+Edge case handlers
+
+Phase 7:
+Frontend UI
+
+==================================================
+
+Generate complete implementation step-by-step with real production code.
+
+Do not generate mock code.
+
+Do not skip edge case handling.
