@@ -83,11 +83,11 @@ export function useRegister() {
       if (!res.ok) throw new Error("Registration failed");
       return api.auth.register.responses[201].parse(await res.json());
     },
-    onSuccess: () => {
-      // Auto login usually handled by backend setting cookie on register, if so invalidating me works
-      queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
+    onSuccess: (user) => {
+      queryClient.setQueryData([api.auth.me.path], user);
+      useAuthStore.getState().setUser(user);
       setLocation("/");
-      toast({ title: "Account created", description: "Your account is pending approval." });
+      toast({ title: "Account created", description: `Welcome, ${user.fullName}!` });
     },
     onError: (err: Error) => {
       toast({ title: "Registration Failed", description: err.message, variant: "destructive" });

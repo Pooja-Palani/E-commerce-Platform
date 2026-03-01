@@ -13,18 +13,6 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-  // Basic middleware to parse cookies
-  app.use((req: any, res, next) => {
-    if (!req.cookies && req.headers.cookie) {
-      req.cookies = req.headers.cookie.split(';').reduce((acc: any, cookie: string) => {
-        const [key, val] = cookie.trim().split('=');
-        acc[key] = val;
-        return acc;
-      }, {});
-    }
-    next();
-  });
-  
   app.post(api.auth.register.path, async (req, res) => {
     try {
       const input = api.auth.register.input.parse(req.body);
@@ -62,6 +50,10 @@ export async function registerRoutes(
         targetType: "USER",
         targetId: user.id
       });
+
+      // Auto-login after registration by setting JWT cookie
+      const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '24h' });
+      res.cookie("token", token, { httpOnly: true, secure: process.env.NODE_ENV === "production", path: "/" });
       
       res.status(201).json(user);
     } catch (err) {

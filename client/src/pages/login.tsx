@@ -6,20 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Link, Redirect } from "wouter";
-import { useAuthStore } from "@/store/use-auth";
+import { Link } from "wouter";
 import { ShoppingBag } from "lucide-react";
 
 export default function Login() {
   const login = useLogin();
-  const user = useAuthStore(s => s.user);
 
   const form = useForm<LoginRequest>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
-
-  if (user) return <Redirect to="/" />;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
