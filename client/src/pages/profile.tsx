@@ -1,0 +1,169 @@
+import { Layout } from "@/components/layout";
+import { useAuthStore } from "@/store/use-auth";
+import { useCommunities, useUserCommunities, useJoinCommunity } from "@/hooks/use-communities";
+import { useUpdateUser } from "@/hooks/use-users";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { User, Mail, Shield, MapPin, Phone, Info, Building2, CheckCircle, Clock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+
+export default function Profile() {
+    const user = useAuthStore((state) => state.user);
+    const { data: allCommunities, isLoading: loadingAll } = useCommunities();
+    const { data: memberships = [], isLoading: loadingMemberships } = useUserCommunities(user?.id || "");
+    const join = useJoinCommunity();
+    const update = useUpdateUser();
+
+    if (!user || loadingAll || loadingMemberships) {
+        return <Layout><LoadingSpinner /></Layout>;
+    }
+
+    const membershipMap = new Map();
+    memberships.forEach((m: any) => membershipMap.set(m.community.id, m.joinStatus));
+
+    const setPrimaryCommunity = (communityId: string) => {
+        update.mutate({ id: user.id, data: { communityId, version: user.version } });
+    };
+
+    return (
+        <Layout>
+            <div className="max-w-5xl mx-auto py-10 px-4 space-y-8">
+                <header>
+                    <h1 className="text-3xl font-bold tracking-tight">Your Profile</h1>
+                    <p className="text-muted-foreground mt-1 text-lg">Manage your personal information and community settings.</p>
+                </header>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    {/* User Basic Info Card */}
+                    <Card className="md:col-span-1 border-border/50 shadow-sm overflow-hidden bg-white">
+                        <div className="h-24 bg-primary/10 flex items-center justify-center">
+                            <div className="w-20 h-20 rounded-full bg-primary flex items-center justify-center text-white border-4 border-white shadow-sm mt-12">
+                                <User className="w-10 h-10" />
+                            </div>
+                        </div>
+                        <CardContent className="pt-14 text-center">
+                            <h3 className="text-xl font-bold">{user.fullName}</h3>
+                            <p className="text-sm text-muted-foreground">{user.email}</p>
+                            <div className="mt-4 flex justify-center">
+                                <Badge variant="secondary" className="capitalize px-4 py-1 text-xs font-bold bg-primary/5 text-primary border-primary/10">
+                                    {user.role.toLowerCase().replace('_', ' ')}
+                                </Badge>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Details Card */}
+                    <Card className="md:col-span-2 border-border/50 shadow-sm bg-white">
+                        <CardHeader className="bg-slate-50 border-b border-border/50">
+                            <CardTitle className="text-lg">Account Details</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-6 pt-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                                        <Mail className="w-3 h-3" /> Email
+                                    </div>
+                                    <p className="text-sm font-medium">{user.email}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                                        <Phone className="w-3 h-3" /> Phone
+                                    </div>
+                                    <p className="text-sm font-medium">{user.phone || 'Not provided'}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                                        <MapPin className="w-3 h-3" /> Locality
+                                    </div>
+                                    <p className="text-sm font-medium">{user.locality || 'Not provided'}</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <div className="border border-border/50 bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div className="bg-slate-50 p-6 border-b border-border/50">
+                        <h2 className="text-2xl font-bold flex items-center gap-2">
+                            <Building2 className="w-6 h-6 text-indigo-600" /> Community Memberships
+                        </h2>
+                        <p className="text-muted-foreground mt-1">Join local communities and switch your active context.</p>
+                    </div>
+                    <div className="p-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {allCommunities?.map((community) => {
+                                const status = membershipMap.get(community.id);
+                                const isPrimary = user.communityId === community.id;
+
+                                return (
+                                    <Card key={community.id} className={`border-border/50 transition-all ${isPrimary ? 'ring-2 ring-primary bg-primary/5 shadow-md' : 'hover:shadow-md'}`}>
+                                        <CardHeader>
+                                            <CardTitle className="text-lg font-bold">{community.name}</CardTitle>
+                                            <CardDescription className="flex items-center gap-1 line-clamp-1">
+                                                <MapPin className="w-3 h-3" /> {community.locality}
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            {status === 'ACTIVE' ? (
+                                                <div className="space-y-4">
+                                                    <Badge className="bg-emerald-500 hover:bg-emerald-600"><CheckCircle className="w-3 h-3 mr-1" /> Active Member</Badge>
+                                                    {isPrimary ? (
+                                                        <div className="text-sm font-medium text-emerald-600 bg-emerald-50 px-3 py-2 rounded-md text-center border border-emerald-200">
+                                                            Currently Active Context
+                                                        </div>
+                                                    ) : (
+                                                        <Button
+                                                            variant="outline"
+                                                            className="w-full font-bold border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                                                            onClick={() => setPrimaryCommunity(community.id)}
+                                                            disabled={update.isPending}
+                                                        >
+                                                            Set as Active Context
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            ) : status === 'PENDING' ? (
+                                                <div className="space-y-4">
+                                                    <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
+                                                        <Clock className="w-3 h-3 mr-1" /> Request Pending
+                                                    </Badge>
+                                                    <div className="text-xs text-muted-foreground bg-slate-50 p-3 rounded-md border border-slate-100">
+                                                        Awaiting approval from the Community Manager.
+                                                    </div>
+                                                </div>
+                                            ) : status === 'REJECTED' || status === 'REMOVED' ? (
+                                                <div className="space-y-4">
+                                                    <Badge variant="destructive">Membership Removed</Badge>
+                                                    <div className="text-xs text-muted-foreground p-3">
+                                                        You were removed or rejected from this community.
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-4">
+                                                    <p className="text-xs text-muted-foreground line-clamp-2">{community.description}</p>
+                                                    <Button
+                                                        className="w-full font-bold"
+                                                        onClick={() => join.mutate(community.id)}
+                                                        disabled={join.isPending}
+                                                    >
+                                                        {join.isPending ? "Requesting..." : "Join Community"}
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })}
+                            {allCommunities?.length === 0 && (
+                                <div className="col-span-full py-10 text-center text-muted-foreground">
+                                    No communities are available on the platform yet.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Layout>
+    );
+}

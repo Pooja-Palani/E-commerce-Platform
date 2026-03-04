@@ -106,21 +106,4 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
   
-  /* Elevate utility for Shadcn */
-  .hover-elevate:not(.no-default-hover-elevate)::after {
-    content: "";
-    pointer-events: none;
-    position: absolute;
-    inset: 0px;
-    border-radius: inherit;
-    z-index: 10;
-  }
-
-  .hover-elevate:hover:not(.no-default-hover-elevate)::after {
-    background-color: var(--elevate-1);
-  }
-
-  .active-elevate-2:active:not(.no-default-active-elevate)::after {
-    background-color: var(--elevate-2);
-  }
 }

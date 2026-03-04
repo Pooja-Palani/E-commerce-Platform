@@ -11,6 +11,7 @@ export function useListings() {
       if (!res.ok) throw new Error("Failed to fetch listings");
       return api.listings.list.responses[200].parse(await res.json());
     },
+    refetchInterval: 2000,
   });
 }
 

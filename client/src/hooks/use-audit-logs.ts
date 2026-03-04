@@ -9,5 +9,6 @@ export function useAuditLogs() {
       if (!res.ok) throw new Error("Failed to fetch audit logs");
       return api.auditLogs.list.responses[200].parse(await res.json());
     },
+    refetchInterval: 2000,
   });
 }

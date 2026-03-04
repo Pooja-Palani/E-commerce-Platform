@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { 
-  users, communities, listings, auditLogs,
-  insertUserSchema, insertCommunitySchema, insertListingSchema,
+import {
+  users, communities, listings, auditLogs, bookings, orders, platformSettings,
+  insertUserSchema, insertCommunitySchema, insertListingSchema, insertPlatformSettingsSchema,
   loginSchema, registerSchema
 } from './schema';
 
@@ -107,6 +107,15 @@ export const api = {
         200: z.custom<typeof users.$inferSelect>(),
         404: errorSchemas.notFound,
       }
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/communities/:id' as const,
+      responses: {
+        200: z.object({ message: z.string() }),
+        403: errorSchemas.forbidden,
+        404: errorSchemas.notFound,
+      }
     }
   },
   users: {
@@ -126,6 +135,15 @@ export const api = {
         400: errorSchemas.validation,
         404: errorSchemas.notFound,
         409: errorSchemas.conflict,
+      }
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/users/:id' as const,
+      responses: {
+        200: z.object({ message: z.string() }),
+        403: errorSchemas.forbidden,
+        404: errorSchemas.notFound,
       }
     }
   },
@@ -166,12 +184,136 @@ export const api = {
       }
     }
   },
+  bookings: {
+    list: {
+      method: "GET" as const,
+      path: "/api/bookings" as const,
+      responses: {
+        200: z.array(z.custom<typeof bookings.$inferSelect>()),
+      },
+    },
+    create: {
+      method: "POST" as const,
+      path: "/api/bookings" as const,
+      input: z.object({
+        listingId: z.string(),
+        bookingDate: z.string().or(z.date()),
+      }),
+      responses: {
+        201: z.custom<typeof bookings.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
+  },
+  orders: {
+    list: {
+      method: "GET" as const,
+      path: "/api/orders" as const,
+      responses: {
+        200: z.array(z.custom<typeof orders.$inferSelect>()),
+      },
+    },
+    create: {
+      method: "POST" as const,
+      path: "/api/orders" as const,
+      input: z.object({
+        listingId: z.string(),
+      }),
+      responses: {
+        201: z.custom<typeof orders.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
+  },
   auditLogs: {
     list: {
-      method: 'GET' as const,
-      path: '/api/audit-logs' as const,
+      method: "GET" as const,
+      path: "/api/audit-logs" as const,
       responses: {
         200: z.array(z.custom<typeof auditLogs.$inferSelect>()),
+        403: errorSchemas.forbidden,
+      },
+    },
+  },
+  admin: {
+    analytics: {
+      method: 'GET' as const,
+      path: '/api/admin/analytics' as const,
+      responses: {
+        200: z.object({
+          metrics: z.object({
+            communities: z.number(),
+            totalUsers: z.number(),
+            activeServices: z.number(),
+            totalRevenue: z.number(),
+            commission: z.number(),
+          }),
+          revenueTrend: z.array(z.object({
+            name: z.string(),
+            revenue: z.number(),
+          })),
+          userGrowth: z.array(z.object({
+            name: z.string(),
+            users: z.number(),
+          })),
+          serviceCategories: z.array(z.object({
+            name: z.string(),
+            value: z.number(),
+            color: z.string(),
+          })),
+        }),
+        403: errorSchemas.forbidden,
+      }
+    },
+    settings: {
+      get: {
+        method: 'GET' as const,
+        path: '/api/admin/settings' as const,
+        responses: {
+          200: z.custom<typeof platformSettings.$inferSelect>(),
+          403: errorSchemas.forbidden,
+        }
+      },
+      update: {
+        method: 'PUT' as const,
+        path: '/api/admin/settings' as const,
+        input: insertPlatformSettingsSchema.partial(),
+        responses: {
+          200: z.custom<typeof platformSettings.$inferSelect>(),
+          403: errorSchemas.forbidden,
+        }
+      }
+    },
+  },
+  manager: {
+    analytics: {
+      method: 'GET' as const,
+      path: '/api/manager/analytics' as const,
+      responses: {
+        200: z.object({
+          actionCenter: z.object({
+            pendingApprovals: z.number(),
+            reportedListings: z.number(),
+            disputedBookings: z.number(),
+            lowRatedServices: z.number(),
+          }),
+          snapshot: z.object({
+            totalMembers: z.number(),
+            activeSellers: z.number(),
+            totalListings: z.number(),
+            weeklyGrowth: z.number(),
+            monthlyGmv: z.number(),
+            platformCommission: z.number(),
+          }),
+          weeklyBookingsTrend: z.array(z.object({
+            name: z.string(),
+            bookings: z.number(),
+          })),
+          monthlyRevenueTrend: z.array(z.object({
+            name: z.string(),
+            revenue: z.number(),
+          })),
+        }),
         403: errorSchemas.forbidden,
       }
     }

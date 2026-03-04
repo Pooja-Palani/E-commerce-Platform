@@ -11,6 +11,21 @@ export function useCommunities() {
       if (!res.ok) throw new Error("Failed to fetch communities");
       return api.communities.list.responses[200].parse(await res.json());
     },
+    refetchInterval: 2000,
+  });
+}
+
+export function useUserCommunities(userId: string) {
+  return useQuery({
+    queryKey: ['/api/users', userId, 'communities'],
+    queryFn: async () => {
+      if (!userId) return [];
+      const res = await fetch(`/api/users/${userId}/communities`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch user communities");
+      return await res.json();
+    },
+    enabled: !!userId,
+    refetchInterval: 2000,
   });
 }
 
@@ -79,7 +94,32 @@ export function useJoinCommunity() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] }); // Invalidate profile communities
       toast({ title: "Joined community. Status is pending approval." });
+    }
+  });
+}
+
+export function useDeleteCommunity() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const url = buildUrl(api.communities.delete.path, { id });
+      const res = await fetch(url, {
+        method: api.communities.delete.method,
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete community");
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.communities.list.path] });
+      toast({ title: "Community deleted successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     }
   });
 }

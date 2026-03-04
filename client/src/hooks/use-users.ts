@@ -11,6 +11,7 @@ export function useUsers() {
       if (!res.ok) throw new Error("Failed to fetch users");
       return api.users.list.responses[200].parse(await res.json());
     },
+    refetchInterval: 2000,
   });
 }
 
@@ -38,6 +39,30 @@ export function useUpdateUser() {
     },
     onError: (error: Error) => {
       toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    }
+  });
+}
+
+export function useDeleteUser() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const url = buildUrl(api.users.delete.path, { id });
+      const res = await fetch(url, {
+        method: api.users.delete.method,
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to remove user");
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.users.list.path] });
+      toast({ title: "User removed successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Removal failed", description: error.message, variant: "destructive" });
     }
   });
 }
