@@ -7,7 +7,9 @@ import {
   type AuditLog, type Booking, type Order,
   type PlatformSettings, type UpdatePlatformSettingsRequest,
   platformSettings,
-  userCommunities, type UserCommunity, type InsertUserCommunity
+  userCommunities, type UserCommunity, type InsertUserCommunity,
+  posts, type Post, type InsertPost,
+  comments, type Comment, type InsertComment
 } from "@shared/schema";
 import { eq, and, or } from "drizzle-orm";
 
@@ -22,7 +24,7 @@ export interface IStorage {
 
   // Communities
   getCommunity(id: string): Promise<Community | undefined>;
-  getCommunities(): Promise<Community[]>;
+  getCommunities(parentId?: string): Promise<Community[]>;
   createCommunity(community: InsertCommunity): Promise<Community>;
   updateCommunity(id: string, updates: UpdateCommunityRequest): Promise<Community | undefined>;
   deleteCommunity(id: string): Promise<boolean>;
@@ -54,6 +56,13 @@ export interface IStorage {
   // Settings
   getSettings(): Promise<PlatformSettings>;
   updateSettings(updates: UpdatePlatformSettingsRequest): Promise<PlatformSettings>;
+
+  // Forums
+  getPosts(communityId: string): Promise<Post[]>;
+  getPost(id: string): Promise<Post | undefined>;
+  createPost(post: InsertPost): Promise<Post>;
+  getComments(postId: string): Promise<Comment[]>;
+  createComment(comment: InsertComment): Promise<Comment>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -97,7 +106,10 @@ export class DatabaseStorage implements IStorage {
     return community;
   }
 
-  async getCommunities(): Promise<Community[]> {
+  async getCommunities(parentId?: string): Promise<Community[]> {
+    if (parentId) {
+      return await db.select().from(communities).where(eq(communities.parentId, parentId));
+    }
     return await db.select().from(communities);
   }
 
@@ -229,6 +241,30 @@ export class DatabaseStorage implements IStorage {
       .where(eq(platformSettings.id, settings.id))
       .returning();
     return updated;
+  }
+
+  // Forums
+  async getPosts(communityId: string): Promise<Post[]> {
+    return await db.select().from(posts).where(eq(posts.communityId, communityId)).orderBy(posts.createdAt);
+  }
+
+  async getPost(id: string): Promise<Post | undefined> {
+    const [post] = await db.select().from(posts).where(eq(posts.id, id));
+    return post;
+  }
+
+  async createPost(post: InsertPost): Promise<Post> {
+    const [newPost] = await db.insert(posts).values(post).returning();
+    return newPost;
+  }
+
+  async getComments(postId: string): Promise<Comment[]> {
+    return await db.select().from(comments).where(eq(comments.postId, postId)).orderBy(comments.createdAt);
+  }
+
+  async createComment(comment: InsertComment): Promise<Comment> {
+    const [newComment] = await db.insert(comments).values(comment).returning();
+    return newComment;
   }
 }
 

@@ -15,9 +15,13 @@ export const listingTypeEnum = pgEnum("listing_type", ["SERVICE", "PRODUCT"]);
 
 export const bookingStatusEnum = pgEnum("booking_status", ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED"]);
 export const orderStatusEnum = pgEnum("order_status", ["PENDING", "CONFIRMED", "SHIPPED", "DELIVERED", "CANCELLED"]);
+export const availabilityBasisEnum = pgEnum("availability_basis", ["FOREVER", "TIMELINE", "STOCK"]);
+export const paymentPreferenceEnum = pgEnum("payment_preference", ["IN_APP", "DIRECT"]);
+export const logisticsPreferenceEnum = pgEnum("logistics_preference", ["PICKUP", "DELIVERY_SUPPORT"]);
 
 export const communities = pgTable("communities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  parentId: varchar("parent_id"), // Support for sub-communities
   name: text("name").notNull(),
   visibility: communityVisibilityEnum("visibility").notNull().default("PUBLIC"),
   status: communityStatusEnum("status").notNull().default("ACTIVE"),
@@ -80,6 +84,14 @@ export const listings = pgTable("listings", {
   communityId: varchar("community_id").notNull(), // FK to communities
   sellerNameSnapshot: text("seller_name_snapshot").notNull(),
   communityNameSnapshot: text("community_name_snapshot").notNull(),
+  availabilityBasis: availabilityBasisEnum("availability_basis").notNull().default("FOREVER"),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  stockQuantity: integer("stock_quantity"),
+  buyNowEnabled: boolean("buy_now_enabled").notNull().default(true),
+  contactSellerEnabled: boolean("contact_seller_enabled").notNull().default(true),
+  paymentPreference: paymentPreferenceEnum("payment_preference").notNull().default("DIRECT"),
+  sellerContactSnapshot: text("seller_contact_snapshot"),
   visibility: listingVisibilityEnum("visibility").notNull().default("COMMUNITY_ONLY"),
   status: listingStatusEnum("status").notNull().default("ACTIVE"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -105,6 +117,8 @@ export const orders = pgTable("orders", {
   sellerId: varchar("seller_id").notNull(),
   status: orderStatusEnum("status").notNull().default("PENDING"),
   priceSnapshot: integer("price_snapshot").notNull(),
+  logisticsPreference: logisticsPreferenceEnum("logistics_preference").notNull().default("PICKUP"),
+  deliveryAddress: text("delivery_address"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   version: integer("version").default(1).notNull(),
 });
@@ -116,6 +130,23 @@ export const auditLogs = pgTable("audit_logs", {
   targetType: text("target_type").notNull(),
   targetId: varchar("target_id").notNull(),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
+export const posts = pgTable("posts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  communityId: varchar("community_id").notNull(),
+  authorId: varchar("author_id").notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const comments = pgTable("comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: varchar("post_id").notNull(),
+  authorId: varchar("author_id").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const platformSettings = pgTable("platform_settings", {
@@ -138,10 +169,23 @@ export const platformSettings = pgTable("platform_settings", {
 // Zod Schemas
 export const insertCommunitySchema = createInsertSchema(communities).omit({ id: true, createdAt: true, version: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true, version: true, passwordHash: true });
-export const insertListingSchema = createInsertSchema(listings).omit({ id: true, createdAt: true, version: true, sellerNameSnapshot: true, communityNameSnapshot: true, visibility: true });
+export const insertListingSchema = createInsertSchema(listings, {
+  startDate: z.string().optional().nullable().transform(v => v ? new Date(v) : null),
+  endDate: z.string().optional().nullable().transform(v => v ? new Date(v) : null),
+  stockQuantity: z.number().min(0).optional().nullable(),
+}).omit({
+  id: true,
+  createdAt: true,
+  version: true,
+  sellerNameSnapshot: true,
+  communityNameSnapshot: true,
+  visibility: true
+});
 export const insertBookingSchema = createInsertSchema(bookings).omit({ id: true, createdAt: true, version: true });
 export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, version: true });
 export const insertPlatformSettingsSchema = createInsertSchema(platformSettings).omit({ id: true, updatedAt: true });
+export const insertPostSchema = createInsertSchema(posts).omit({ id: true, createdAt: true });
+export const insertCommentSchema = createInsertSchema(comments).omit({ id: true, createdAt: true });
 
 export type Community = typeof communities.$inferSelect;
 export type InsertCommunity = z.infer<typeof insertCommunitySchema>;
@@ -167,6 +211,12 @@ export type InsertOrder = typeof orders.$inferInsert;
 export type PlatformSettings = typeof platformSettings.$inferSelect;
 export type InsertPlatformSettings = z.infer<typeof insertPlatformSettingsSchema>;
 export type UpdatePlatformSettingsRequest = Partial<InsertPlatformSettings>;
+
+export type Post = typeof posts.$inferSelect;
+export type InsertPost = z.infer<typeof insertPostSchema>;
+
+export type Comment = typeof comments.$inferSelect;
+export type InsertComment = z.infer<typeof insertCommentSchema>;
 
 export const loginSchema = z.object({
   email: z.string().email(),

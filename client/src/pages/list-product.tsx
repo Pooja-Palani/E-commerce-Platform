@@ -29,13 +29,21 @@ export default function ListProduct() {
         resolver: zodResolver(insertListingSchema.extend({
             listingType: z.literal("PRODUCT"),
             communityId: z.string().min(1, "Community is required"),
+            availabilityBasis: z.enum(["FOREVER", "TIMELINE", "STOCK"]).optional(),
+            startDate: z.any().optional(),
+            endDate: z.any().optional(),
+            stockQuantity: z.number().min(0).optional().nullable(),
         })),
         defaultValues: {
             title: "",
             description: "",
             price: 0,
             listingType: "PRODUCT",
-            communityId: user?.communityId || ""
+            communityId: user?.communityId || "",
+            availabilityBasis: "FOREVER",
+            startDate: "",
+            endDate: "",
+            stockQuantity: null as number | null
         }
     });
 
@@ -129,8 +137,61 @@ export default function ListProduct() {
                                     </div>
                                 </div>
 
+                                <div className="grid gap-2">
+                                    <Label className="font-bold text-sm">Availability Basis</Label>
+                                    <Select
+                                        defaultValue="FOREVER"
+                                        onValueChange={(v) => form.setValue("availabilityBasis" as any, v)}
+                                    >
+                                        <SelectTrigger className="h-11 border-primary/20 focus:ring-primary/20">
+                                            <SelectValue placeholder="Select availability" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="FOREVER">Forever (Always Available)</SelectItem>
+                                            <SelectItem value="TIMELINE">Timeline (Specific Dates)</SelectItem>
+                                            <SelectItem value="STOCK">Stock (Limited Quantity)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {form.watch("availabilityBasis" as any) === "TIMELINE" && (
+                                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="startDate" className="font-bold text-sm">Start Date</Label>
+                                            <Input
+                                                id="startDate"
+                                                type="date"
+                                                {...form.register("startDate")}
+                                                className="h-11 border-primary/20 focus:ring-primary/20"
+                                            />
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="endDate" className="font-bold text-sm">End Date</Label>
+                                            <Input
+                                                id="endDate"
+                                                type="date"
+                                                {...form.register("endDate")}
+                                                className="h-11 border-primary/20 focus:ring-primary/20"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {form.watch("availabilityBasis" as any) === "STOCK" && (
+                                    <div className="grid gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <Label htmlFor="stockQuantity" className="font-bold text-sm">Stock Quantity</Label>
+                                        <Input
+                                            id="stockQuantity"
+                                            type="number"
+                                            {...form.register("stockQuantity", { valueAsNumber: true })}
+                                            className="h-11 border-primary/20 focus:ring-primary/20"
+                                            placeholder="e.g. 10"
+                                        />
+                                    </div>
+                                )}
+
                                 <div className="grid gap-2 pt-2">
-                                    <Label htmlFor="description" className="font-bold">Product Description</Label>
+                                    <Label htmlFor="description" className="font-bold text-sm">Product Description</Label>
                                     <Textarea
                                         id="description"
                                         placeholder="Tell us about the item, its age, and why you are selling it..."

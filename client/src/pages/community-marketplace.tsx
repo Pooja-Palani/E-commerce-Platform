@@ -4,25 +4,36 @@ import { useAuthStore } from "@/store/use-auth";
 import { ListingCard } from "@/components/listing-card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PackageOpen } from "lucide-react";
+import { useParams } from "wouter";
+import { useCommunities } from "@/hooks/use-communities";
 
 export default function CommunityMarketplace() {
+  const params = useParams();
   const { data: listings, isLoading } = useListings();
+  const { data: communities } = useCommunities();
   const user = useAuthStore(s => s.user!);
+
+  const targetCommunityId = params.id || user.communityId;
+  const currentCommunity = communities?.find(c => c.id === targetCommunityId);
 
   if (isLoading) return <Layout><LoadingSpinner /></Layout>;
 
-  // Filter listings: Active, in user's community
-  const communityListings = listings?.filter(l => 
-    l.status === 'ACTIVE' && 
-    l.communityId === user.communityId
+  // Filter listings: Active, in target community
+  const communityListings = listings?.filter(l =>
+    l.status === 'ACTIVE' &&
+    l.communityId === targetCommunityId
   ) || [];
 
   return (
     <Layout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Community Market</h1>
-          <p className="text-muted-foreground">Items available exclusively to your neighbors.</p>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {currentCommunity ? `${currentCommunity.name} Market` : 'Community Market'}
+          </h1>
+          <p className="text-muted-foreground">
+            {currentCommunity ? `Items available in ${currentCommunity.name}.` : 'Items available exclusively to your neighbors.'}
+          </p>
         </div>
 
         {communityListings.length === 0 ? (

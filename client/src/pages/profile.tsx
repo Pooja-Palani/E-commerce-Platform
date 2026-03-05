@@ -7,9 +7,14 @@ import { User, Mail, Shield, MapPin, Phone, Info, Building2, CheckCircle, Clock 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { ShoppingCart, Store } from "lucide-react";
 
 export default function Profile() {
     const user = useAuthStore((state) => state.user);
+    const viewMode = useAuthStore((state) => state.viewMode);
+    const setViewMode = useAuthStore((state) => state.setViewMode);
     const { data: allCommunities, isLoading: loadingAll } = useCommunities();
     const { data: memberships = [], isLoading: loadingMemberships } = useUserCommunities(user?.id || "");
     const join = useJoinCommunity();
@@ -79,6 +84,39 @@ export default function Profile() {
                                     <p className="text-sm font-medium">{user.locality || 'Not provided'}</p>
                                 </div>
                             </div>
+
+                            {user.role === "RESIDENT" && (
+                                <div className="mt-8 pt-6 border-t border-border/50">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-1">
+                                            <h4 className="text-sm font-bold">Platform View Mode</h4>
+                                            <p className="text-xs text-muted-foreground">Switch between buying and selling tools.</p>
+                                        </div>
+                                        <div className="flex items-center gap-4 bg-muted/30 p-2 rounded-xl border border-border/50">
+                                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-background border border-border/50 shadow-sm">
+                                                <div className={`p-1 rounded-md ${viewMode === 'BUYER' ? 'bg-blue-500 text-white' : 'bg-muted text-muted-foreground'}`}>
+                                                    <ShoppingCart size={12} />
+                                                </div>
+                                                <Label htmlFor="profile-view-mode" className={`text-xs font-bold ${viewMode === 'BUYER' ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                                    Buyer
+                                                </Label>
+                                                <Switch
+                                                    id="profile-view-mode"
+                                                    checked={viewMode === 'SELLER'}
+                                                    onCheckedChange={(checked) => setViewMode(checked ? 'SELLER' : 'BUYER')}
+                                                    className="data-[state=checked]:bg-orange-500"
+                                                />
+                                                <Label htmlFor="profile-view-mode" className={`text-xs font-bold ${viewMode === 'SELLER' ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                                    Seller
+                                                </Label>
+                                                <div className={`p-1 rounded-md ${viewMode === 'SELLER' ? 'bg-orange-500 text-white' : 'bg-muted text-muted-foreground'}`}>
+                                                    <Store size={12} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </div>

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import {
   users, communities, listings, auditLogs, bookings, orders, platformSettings,
   insertUserSchema, insertCommunitySchema, insertListingSchema, insertPlatformSettingsSchema,
-  loginSchema, registerSchema
+  loginSchema, registerSchema, posts, comments
 } from './schema';
 
 export const errorSchemas = {
@@ -116,7 +116,58 @@ export const api = {
         403: errorSchemas.forbidden,
         404: errorSchemas.notFound,
       }
+    },
+    posts: {
+      list: {
+        method: 'GET' as const,
+        path: '/api/communities/:id/posts' as const,
+        responses: {
+          200: z.array(z.custom<typeof posts.$inferSelect>()),
+        }
+      },
+      create: {
+        method: 'POST' as const,
+        path: '/api/communities/:id/posts' as const,
+        input: z.object({
+          title: z.string().min(1),
+          content: z.string().min(1),
+        }),
+        responses: {
+          201: z.custom<typeof posts.$inferSelect>(),
+          400: errorSchemas.validation,
+        }
+      }
     }
+  },
+  posts: {
+    get: {
+      method: "GET" as const,
+      path: "/api/posts/:id" as const,
+      responses: {
+        200: z.custom<typeof posts.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    comments: {
+      list: {
+        method: "GET" as const,
+        path: "/api/posts/:id/comments" as const,
+        responses: {
+          200: z.array(z.custom<typeof comments.$inferSelect>()),
+        },
+      },
+      create: {
+        method: "POST" as const,
+        path: "/api/posts/:id/comments" as const,
+        input: z.object({
+          content: z.string().min(1),
+        }),
+        responses: {
+          201: z.custom<typeof comments.$inferSelect>(),
+          400: errorSchemas.validation,
+        },
+      },
+    },
   },
   users: {
     list: {
@@ -218,6 +269,8 @@ export const api = {
       path: "/api/orders" as const,
       input: z.object({
         listingId: z.string(),
+        logisticsPreference: z.enum(["PICKUP", "DELIVERY_SUPPORT"]).optional(),
+        deliveryAddress: z.string().optional(),
       }),
       responses: {
         201: z.custom<typeof orders.$inferSelect>(),

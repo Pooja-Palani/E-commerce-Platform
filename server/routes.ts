@@ -141,7 +141,8 @@ export async function registerRoutes(
   };
 
   app.get(api.communities.list.path, authMiddleware, async (req, res) => {
-    const communities = await storage.getCommunities();
+    const parentId = req.query.parentId as string | undefined;
+    const communities = await storage.getCommunities(parentId);
     res.status(200).json(communities);
   });
 
@@ -254,6 +255,51 @@ export async function registerRoutes(
     }
   });
 
+  // Forum Routes
+  app.get(api.communities.posts.list.path, authMiddleware, async (req, res) => {
+    const posts = await storage.getPosts(req.params.id);
+    res.status(200).json(posts);
+  });
+
+  app.post(api.communities.posts.create.path, authMiddleware, async (req: any, res) => {
+    try {
+      const input = api.communities.posts.create.input.parse(req.body);
+      const post = await storage.createPost({
+        ...input,
+        communityId: req.params.id,
+        authorId: req.user.id
+      });
+      res.status(201).json(post);
+    } catch (err) {
+      res.status(400).json({ message: "Invalid input" });
+    }
+  });
+
+  app.get(api.posts.get.path, authMiddleware, async (req, res) => {
+    const post = await storage.getPost(req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    res.status(200).json(post);
+  });
+
+  app.get(api.posts.comments.list.path, authMiddleware, async (req, res) => {
+    const comments = await storage.getComments(req.params.id);
+    res.status(200).json(comments);
+  });
+
+  app.post(api.posts.comments.create.path, authMiddleware, async (req: any, res) => {
+    try {
+      const input = api.posts.comments.create.input.parse(req.body);
+      const comment = await storage.createComment({
+        ...input,
+        postId: req.params.id,
+        authorId: req.user.id
+      });
+      res.status(201).json(comment);
+    } catch (err) {
+      res.status(400).json({ message: "Invalid input" });
+    }
+  });
+
   app.get(api.listings.list.path, authMiddleware, async (req: any, res) => {
     const listings = await storage.getListings();
     // Filter listings based on visibility and user's community
@@ -288,7 +334,8 @@ export async function registerRoutes(
         sellerNameSnapshot: user.sellerDisplayName || user.fullName,
         communityNameSnapshot: comm.name,
         visibility: comm.visibility === "PUBLIC" ? "GLOBAL" : "COMMUNITY_ONLY",
-        status: "ACTIVE"
+        status: "ACTIVE",
+        sellerContactSnapshot: user.phone || user.email // Default contact info
       });
       res.status(201).json(listing);
     } catch (err) {

@@ -15,6 +15,11 @@ import {
   Users,
   BarChart3,
   TrendingUp,
+  Store,
+  Wallet,
+  MessageSquare,
+  ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 import {
   Sidebar,
@@ -27,6 +32,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/store/use-auth";
 import { useLogout } from "@/hooks/use-auth-api";
 import { useAdminSettings } from "@/hooks/use-admin";
@@ -35,6 +42,8 @@ import { Link, useLocation } from "wouter";
 
 export function AppSidebar() {
   const user = useAuthStore((state) => state.user);
+  const viewMode = useAuthStore((state) => state.viewMode);
+  const setViewMode = useAuthStore((state) => state.setViewMode);
   const logout = useLogout();
   const [location] = useLocation();
   const { data: settings } = useAdminSettings();
@@ -45,9 +54,12 @@ export function AppSidebar() {
 
   const navigationItems = [
     { title: "Dashboard", url: "/", icon: LayoutDashboard },
+    { title: "Community Forum", url: "/forum", icon: MessageSquare },
     { title: "My Activity", url: "/activity", icon: Calendar },
-    { title: "My Services", url: "/my-services", icon: Wrench },
-    { title: "My Products", url: "/my-products", icon: Package },
+    ...(user.role === "RESIDENT" && viewMode === "BUYER" ? [] : [
+      { title: "My Services", url: "/my-services", icon: Wrench },
+      { title: "My Products", url: "/my-products", icon: Package },
+    ]),
     { title: "Cart", url: "/cart", icon: ShoppingCart },
   ];
 
@@ -84,6 +96,36 @@ export function AppSidebar() {
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Community:</p>
               <p className="text-sm font-bold text-primary truncate">
                 {user.communityId ? userCommunity?.name || "Loading..." : "No Community Joined"}
+              </p>
+            </div>
+          )}
+
+          {user.role === "RESIDENT" && (
+            <div className="mt-6 px-3 py-4 bg-muted/30 rounded-xl border border-border/50 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">View Mode</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${viewMode === 'BUYER' ? 'bg-blue-500/10 text-blue-500' : 'bg-orange-500/10 text-orange-500'}`}>
+                  {viewMode}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 bg-background/50 p-2 rounded-lg border border-border/50">
+                <div className={`p-1.5 rounded-md ${viewMode === 'BUYER' ? 'bg-blue-500 text-white shadow-blue-500/20' : 'bg-muted text-muted-foreground'} transition-all shadow-sm`}>
+                  <ShoppingCart size={14} />
+                </div>
+                <div className="flex-1">
+                  <Switch
+                    id="view-mode"
+                    checked={viewMode === 'SELLER'}
+                    onCheckedChange={(checked) => setViewMode(checked ? 'SELLER' : 'BUYER')}
+                    className="data-[state=checked]:bg-orange-500"
+                  />
+                </div>
+                <div className={`p-1.5 rounded-md ${viewMode === 'SELLER' ? 'bg-orange-500 text-white shadow-orange-500/20' : 'bg-muted text-muted-foreground'} transition-all shadow-sm`}>
+                  <Store size={14} />
+                </div>
+              </div>
+              <p className="mt-2 text-[10px] text-center text-muted-foreground/60 italic font-medium">
+                Switching to {viewMode === 'BUYER' ? 'Seller' : 'Buyer'} mode...
               </p>
             </div>
           )}
@@ -174,6 +216,27 @@ export function AppSidebar() {
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
+
+            {/* Sub-communities if any */}
+            {user.communityId && communities?.some(c => c.parentId === user.communityId) && (
+              <SidebarGroup>
+                <SidebarGroupLabel className="px-6 text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 mt-4">Sub-Communities</SidebarGroupLabel>
+                <SidebarGroupContent className="px-2">
+                  <SidebarMenu>
+                    {communities.filter(c => c.parentId === user.communityId).map((sub) => (
+                      <SidebarMenuItem key={sub.id}>
+                        <SidebarMenuButton asChild className="px-4 py-2 hover:bg-primary/5 transition-colors group">
+                          <Link href={`/communities/${sub.id}`} className="flex items-center gap-3 w-full">
+                            <Building2 className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
+                            <span className="text-sm font-medium text-muted-foreground/90 group-hover:text-primary">{sub.name}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
           </>
         )}
       </SidebarContent>

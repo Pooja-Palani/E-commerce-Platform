@@ -15,6 +15,19 @@ export function useListings() {
   });
 }
 
+export function useListing(id: string) {
+  return useQuery({
+    queryKey: [api.listings.get.path, { id }],
+    queryFn: async () => {
+      const url = buildUrl(api.listings.get.path, { id });
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch listing");
+      return api.listings.get.responses[200].parse(await res.json());
+    },
+    enabled: !!id,
+  });
+}
+
 export function useCreateListing() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
