@@ -22,7 +22,7 @@ export const logisticsPreferenceEnum = pgEnum("logistics_preference", ["PICKUP",
 export const communities = pgTable("communities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   parentId: varchar("parent_id"), // Support for sub-communities
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
   visibility: communityVisibilityEnum("visibility").notNull().default("PUBLIC"),
   status: communityStatusEnum("status").notNull().default("ACTIVE"),
   locality: text("locality"),
@@ -53,6 +53,7 @@ export const users = pgTable("users", {
   sellerDescription: text("seller_description"),
   locality: text("locality"),
   postalCode: text("postal_code"),
+  unitFlatNumber: text("unit_flat_number"),
   address: text("address"),
   bio: text("bio"),
   profilePhoto: text("profile_photo"),
@@ -219,13 +220,17 @@ export type Comment = typeof comments.$inferSelect;
 export type InsertComment = z.infer<typeof insertCommentSchema>;
 
 export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string()
+  email: z.string().email().transform((s) => s.trim().toLowerCase()),
+  password: z.string().transform((s) => s.trim()),
 });
 export type LoginRequest = z.infer<typeof loginSchema>;
 
 export const registerSchema = insertUserSchema.extend({
-  password: z.string()
+  password: z.string().min(1, "Password is required"),
+  phone: z.string().min(1, "Phone is required"),
+  locality: z.string().min(1, "Locality is required"),
+  postalCode: z.string().min(1, "Postal code is required"),
+  address: z.string().min(1, "Address is required"),
 });
 export type RegisterRequest = z.infer<typeof registerSchema>;
 

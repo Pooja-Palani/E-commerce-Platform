@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerSchema, RegisterRequest } from "@shared/schema";
@@ -7,9 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Link } from "wouter";
+import { Eye, EyeOff } from "lucide-react";
+
+const RequiredAsterisk = () => <span className="text-destructive">*</span>;
 
 export default function Register() {
   const register = useRegister();
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<RegisterRequest>({
     resolver: zodResolver(registerSchema),
@@ -20,6 +25,7 @@ export default function Register() {
       phone: "",
       locality: "",
       postalCode: "",
+      unitFlatNumber: "",
       address: "",
       bio: ""
     },
@@ -43,7 +49,7 @@ export default function Register() {
                       name="fullName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Full Name</FormLabel>
+                          <FormLabel>Full Name <RequiredAsterisk /></FormLabel>
                           <FormControl>
                             <Input placeholder="Arun Kumar" {...field} />
                           </FormControl>
@@ -56,7 +62,7 @@ export default function Register() {
                       name="email"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Email</FormLabel>
+                          <FormLabel>Email <RequiredAsterisk /></FormLabel>
                           <FormControl>
                             <Input placeholder="arun@nexusmarket.in" type="email" {...field} />
                           </FormControl>
@@ -69,7 +75,7 @@ export default function Register() {
                       name="phone"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Phone (Optional)</FormLabel>
+                          <FormLabel>Phone <RequiredAsterisk /></FormLabel>
                           <FormControl>
                             <Input placeholder="+91 98765 43210" {...field} value={field.value || ''} />
                           </FormControl>
@@ -82,9 +88,26 @@ export default function Register() {
                       name="password"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Password</FormLabel>
+                          <FormLabel>Password <RequiredAsterisk /></FormLabel>
                           <FormControl>
-                            <Input type="password" placeholder="••••••••" {...field} />
+                            <div className="relative">
+                              <Input
+                                type={showPassword ? "text" : "password"}
+                                placeholder="••••••••"
+                                className="pr-9"
+                                {...field}
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                                aria-label={showPassword ? "Hide password" : "Show password"}
+                                onClick={() => setShowPassword((p) => !p)}
+                              >
+                                {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                              </Button>
+                            </div>
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -98,7 +121,7 @@ export default function Register() {
                       name="locality"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Locality</FormLabel>
+                          <FormLabel>Locality <RequiredAsterisk /></FormLabel>
                           <FormControl>
                             <Input placeholder="Adyar" {...field} value={field.value || ''} />
                           </FormControl>
@@ -111,9 +134,22 @@ export default function Register() {
                       name="postalCode"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Postal Code</FormLabel>
+                          <FormLabel>Postal Code <RequiredAsterisk /></FormLabel>
                           <FormControl>
                             <Input placeholder="600020" {...field} value={field.value || ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="unitFlatNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Unit / Flat number</FormLabel>
+                          <FormControl>
+                            <Input placeholder="A-101" {...field} value={field.value || ''} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -124,7 +160,7 @@ export default function Register() {
                       name="address"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Address</FormLabel>
+                          <FormLabel>Address <RequiredAsterisk /></FormLabel>
                           <FormControl>
                             <Input placeholder="12, 1st Cross St, Indira Nagar" {...field} value={field.value || ''} />
                           </FormControl>

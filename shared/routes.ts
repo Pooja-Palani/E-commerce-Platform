@@ -51,8 +51,7 @@ export const api = {
       method: 'GET' as const,
       path: '/api/auth/me' as const,
       responses: {
-        200: z.custom<typeof users.$inferSelect>(),
-        401: errorSchemas.unauthorized,
+        200: z.custom<typeof users.$inferSelect>().nullable(),
       }
     },
     logout: {
@@ -233,7 +232,14 @@ export const api = {
         404: errorSchemas.notFound,
         409: errorSchemas.conflict,
       }
-    }
+    },
+    categories: {
+      method: 'GET' as const,
+      path: '/api/listings/categories' as const,
+      responses: {
+        200: z.array(z.string()),
+      },
+    },
   },
   bookings: {
     list: {
@@ -336,6 +342,14 @@ export const api = {
           403: errorSchemas.forbidden,
         }
       }
+    },
+    backup: {
+      method: 'POST' as const,
+      path: '/api/admin/backup' as const,
+      responses: {
+        200: z.object({ message: z.string() }),
+        403: errorSchemas.forbidden,
+      },
     },
   },
   manager: {

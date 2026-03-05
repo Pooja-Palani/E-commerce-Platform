@@ -17,6 +17,7 @@ export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByPhone(phone: string): Promise<User | undefined>;
   getUsers(): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: UpdateUserRequest): Promise<User | undefined>;
@@ -25,6 +26,7 @@ export interface IStorage {
   // Communities
   getCommunity(id: string): Promise<Community | undefined>;
   getCommunities(parentId?: string): Promise<Community[]>;
+  getCommunityMembers(communityId: string): Promise<User[]>;
   createCommunity(community: InsertCommunity): Promise<Community>;
   updateCommunity(id: string, updates: UpdateCommunityRequest): Promise<Community | undefined>;
   deleteCommunity(id: string): Promise<boolean>;
@@ -74,6 +76,11 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async getUserByPhone(phone: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.phone, phone));
     return user;
   }
 
@@ -130,6 +137,10 @@ export class DatabaseStorage implements IStorage {
   async deleteCommunity(id: string): Promise<boolean> {
     const [deleted] = await db.delete(communities).where(eq(communities.id, id)).returning();
     return !!deleted;
+  }
+
+  async getCommunityMembers(communityId: string): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.communityId, communityId));
   }
 
   async createUserCommunity(data: InsertUserCommunity): Promise<UserCommunity> {

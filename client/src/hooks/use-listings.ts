@@ -2,13 +2,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
 import { InsertListing, UpdateListingRequest } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-error";
 
 export function useListings() {
   return useQuery({
     queryKey: [api.listings.list.path],
     queryFn: async () => {
       const res = await fetch(api.listings.list.path, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch listings");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to fetch listings");
+        throw new Error(message);
+      }
       return api.listings.list.responses[200].parse(await res.json());
     },
     refetchInterval: 2000,
@@ -21,7 +25,10 @@ export function useListing(id: string) {
     queryFn: async () => {
       const url = buildUrl(api.listings.get.path, { id });
       const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch listing");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to fetch listing");
+        throw new Error(message);
+      }
       return api.listings.get.responses[200].parse(await res.json());
     },
     enabled: !!id,
@@ -40,7 +47,10 @@ export function useCreateListing() {
         body: JSON.stringify(data),
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to create listing");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to create listing");
+        throw new Error(message);
+      }
       return api.listings.create.responses[201].parse(await res.json());
     },
     onSuccess: () => {
@@ -64,7 +74,10 @@ export function useUpdateListing() {
         credentials: "include",
       });
       if (res.status === 409) throw new Error("Conflict: Listing was updated by someone else.");
-      if (!res.ok) throw new Error("Failed to update listing");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to update listing");
+        throw new Error(message);
+      }
       return api.listings.update.responses[200].parse(await res.json());
     },
     onSuccess: () => {

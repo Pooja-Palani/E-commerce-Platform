@@ -37,7 +37,9 @@ import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/store/use-auth";
 import { useLogout } from "@/hooks/use-auth-api";
 import { useAdminSettings } from "@/hooks/use-admin";
-import { useCommunities } from "@/hooks/use-communities";
+import { useCommunities, useUserCommunities } from "@/hooks/use-communities";
+import { useUpdateUser } from "@/hooks/use-users";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link, useLocation } from "wouter";
 
 export function AppSidebar() {
@@ -48,7 +50,18 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { data: settings } = useAdminSettings();
   const { data: communities } = useCommunities();
+  const { data: userCommunitiesData = [] } = useUserCommunities(user?.id ?? "");
+  const updateUser = useUpdateUser();
   const userCommunity = communities?.find(c => c.id === user?.communityId);
+  const activeMemberships = userCommunitiesData
+    .filter((m: { joinStatus: string }) => m.joinStatus === "ACTIVE")
+    .map((m: { community: { id: string; name: string } }) => m.community);
+  const hasCurrentInList = activeMemberships.some((c: { id: string }) => c.id === user?.communityId);
+  const userCommunitiesList =
+    user?.communityId && !hasCurrentInList && userCommunity
+      ? [{ id: user.communityId!, name: userCommunity.name }, ...activeMemberships]
+      : activeMemberships;
+  const currentCommunityId = user?.communityId ?? userCommunitiesList[0]?.id ?? "";
 
   if (!user) return null;
 
@@ -91,14 +104,35 @@ export function AppSidebar() {
               </div>
             </div>
           </div>
-          {user.role !== "ADMIN" && (
-            <div className="mt-6 p-3 bg-primary/5 rounded-lg border border-primary/10">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Community:</p>
+          <div className="mt-6 p-3 bg-primary/5 rounded-lg border border-primary/10">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Community</p>
+            {userCommunitiesList.length > 0 ? (
+                <Select
+                  value={currentCommunityId || (userCommunitiesList[0]?.id ?? "")}
+                  onValueChange={(value) => {
+                    if (value && user && value !== user.communityId) {
+                      updateUser.mutate({ id: user.id, data: { communityId: value, version: user.version } });
+                    }
+                  }}
+                  disabled={updateUser.isPending}
+                >
+                  <SelectTrigger className="h-9 w-full font-bold text-primary border-primary/20 bg-background/80">
+                    <SelectValue placeholder="Choose community" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {userCommunitiesList.map((c: { id: string; name: string }) => (
+                      <SelectItem key={c.id} value={c.id} className="font-medium">
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+            ) : (
               <p className="text-sm font-bold text-primary truncate">
                 {user.communityId ? userCommunity?.name || "Loading..." : "No Community Joined"}
               </p>
-            </div>
-          )}
+            )}
+          </div>
 
           {user.role === "RESIDENT" && (
             <div className="mt-6 px-3 py-4 bg-muted/30 rounded-xl border border-border/50 shadow-sm">

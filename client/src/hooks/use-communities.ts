@@ -1,17 +1,37 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
-import { InsertCommunity, UpdateCommunityRequest } from "@shared/schema";
+import { InsertCommunity, UpdateCommunityRequest, type User } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-error";
 
 export function useCommunities() {
   return useQuery({
     queryKey: [api.communities.list.path],
     queryFn: async () => {
       const res = await fetch(api.communities.list.path, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch communities");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to fetch communities");
+        throw new Error(message);
+      }
       return api.communities.list.responses[200].parse(await res.json());
     },
     refetchInterval: 2000,
+  });
+}
+
+export function useCommunityMembers(communityId: string | undefined) {
+  return useQuery<User[]>({
+    queryKey: ["/api/communities", communityId, "members"],
+    queryFn: async () => {
+      if (!communityId) return [];
+      const res = await fetch(`/api/communities/${communityId}/members`, { credentials: "include" });
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to fetch members");
+        throw new Error(message);
+      }
+      return res.json();
+    },
+    enabled: !!communityId,
   });
 }
 
@@ -21,7 +41,10 @@ export function useUserCommunities(userId: string) {
     queryFn: async () => {
       if (!userId) return [];
       const res = await fetch(`/api/users/${userId}/communities`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch user communities");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to fetch user communities");
+        throw new Error(message);
+      }
       return await res.json();
     },
     enabled: !!userId,
@@ -41,7 +64,10 @@ export function useCreateCommunity() {
         body: JSON.stringify(data),
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to create community");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to create community");
+        throw new Error(message);
+      }
       return api.communities.create.responses[201].parse(await res.json());
     },
     onSuccess: () => {
@@ -65,7 +91,10 @@ export function useUpdateCommunity() {
         credentials: "include",
       });
       if (res.status === 409) throw new Error("Conflict: This community was updated by someone else.");
-      if (!res.ok) throw new Error("Failed to update community");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to update community");
+        throw new Error(message);
+      }
       return api.communities.update.responses[200].parse(await res.json());
     },
     onSuccess: () => {
@@ -89,13 +118,17 @@ export function useJoinCommunity() {
         method: api.communities.join.method,
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to join community");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to join community");
+        throw new Error(message);
+      }
       return api.communities.join.responses[200].parse(await res.json());
     },
-    onSuccess: () => {
+    onSuccess: (updatedUser: User) => {
+      useAuthStore.getState().setUser(updatedUser);
       queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
-      queryClient.invalidateQueries({ queryKey: ['/api/users'] }); // Invalidate profile communities
-      toast({ title: "Joined community. Status is pending approval." });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", updatedUser.id, "communities"] });
+      toast({ title: "Join request sent", description: "Your community manager will approve your request soon." });
     }
   });
 }
@@ -111,7 +144,10 @@ export function useDeleteCommunity() {
         method: api.communities.delete.method,
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to delete community");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to delete community");
+        throw new Error(message);
+      }
       return await res.json();
     },
     onSuccess: () => {
@@ -121,5 +157,78 @@ export function useDeleteCommunity() {
     onError: (error: Error) => {
       toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     }
+  });
+}
+
+export function useRemoveMemberFromCommunity(communityId: string | undefined) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      if (!communityId) throw new Error("No community selected");
+      const res = await fetch(`/api/communities/${communityId}/members/remove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to remove member");
+        throw new Error(message);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/communities", communityId, "members"] });
+      queryClient.invalidateQueries({ queryKey: [api.users.list.path] });
+      toast({ title: "User removed from community" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Remove failed", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useAddMemberToCommunity(communityId: string | undefined) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      if (!communityId) throw new Error("No community selected");
+      const res = await fetch(`/api/communities/${communityId}/members/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+        credentials: "include",
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        try {
+          const data = text && JSON.parse(text);
+          const msg = (data && data.message) || "Failed to add member";
+          throw new Error(msg);
+        } catch (e) {
+          if (e instanceof SyntaxError) {
+            throw new Error(text?.startsWith("<") ? "Server error. Please try again." : `Failed to add member (${res.status})`);
+          }
+          throw e;
+        }
+      }
+      try {
+        return text ? JSON.parse(text) : null;
+      } catch {
+        throw new Error("Server returned an invalid response. Please try again.");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/communities", communityId, "members"] });
+      queryClient.invalidateQueries({ queryKey: [api.users.list.path] });
+      toast({ title: "User added to community" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Add failed", description: error.message, variant: "destructive" });
+    },
   });
 }

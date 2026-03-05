@@ -62,6 +62,7 @@ export default function Dashboard() {
   }
 
   if (noCommunity) {
+    const hasCommunities = (communities?.length ?? 0) > 0;
     return (
       <Layout>
         <div className="max-w-5xl mx-auto mt-12 space-y-8 px-4">
@@ -71,34 +72,52 @@ export default function Dashboard() {
               Welcome to the Platform
             </div>
             <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">Connect with Your Neighbors</h1>
-            <p className="text-muted-foreground text-lg">Select your residential complex to see local listings and participate in community discussions.</p>
+            <p className="text-muted-foreground text-lg">
+              {hasCommunities
+                ? "Select your residential complex to see local listings and participate in community discussions."
+                : "Join a community to see local listings and participate in discussions. You can also complete your profile first."}
+            </p>
+            {!hasCommunities && (
+              <Button asChild className="mt-4">
+                <Link href="/profile">Go to Profile &amp; Community Memberships</Link>
+              </Button>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {communities?.map((community) => (
-              <Card key={community.id} className="group hover:border-primary/50 transition-all hover:shadow-2xl bg-white border-border/50 rounded-3xl overflow-hidden">
-                <div className="h-32 bg-gradient-to-br from-primary/20 to-primary/5 group-hover:from-primary/30 group-hover:to-primary/10 transition-colors flex items-center justify-center">
-                  <Building2 className="w-12 h-12 text-primary/40 group-hover:scale-110 transition-transform" />
-                </div>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center justify-between text-xl">
-                    <span>{community.name}</span>
-                    <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-widest">{community.locality}</Badge>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">{community.description || "A vibrant community for residents to connect and share services."}</p>
-                  <Button
-                    className="w-full font-bold h-12 rounded-2xl shadow-lg shadow-primary/20"
-                    onClick={() => join.mutate(community.id)}
-                    disabled={join.isPending}
-                  >
-                    {join.isPending ? "Joining..." : `Join ${community.name}`}
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          {hasCommunities ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {communities?.map((community) => (
+                <Card key={community.id} className="group hover:border-primary/50 transition-all hover:shadow-2xl bg-white border-border/50 rounded-3xl overflow-hidden">
+                  <div className="h-32 bg-gradient-to-br from-primary/20 to-primary/5 group-hover:from-primary/30 group-hover:to-primary/10 transition-colors flex items-center justify-center">
+                    <Building2 className="w-12 h-12 text-primary/40 group-hover:scale-110 transition-transform" />
+                  </div>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center justify-between text-xl">
+                      <span>{community.name}</span>
+                      <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-widest">{community.locality}</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">{community.description || "A vibrant community for residents to connect and share services."}</p>
+                    <Button
+                      className="w-full font-bold h-12 rounded-2xl shadow-lg shadow-primary/20"
+                      onClick={() => join.mutate(community.id)}
+                      disabled={join.isPending}
+                    >
+                      {join.isPending ? "Joining..." : `Join ${community.name}`}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card className="border-border/50 p-8 text-center">
+              <p className="text-muted-foreground mb-4">No communities are available on the platform yet. Complete your profile and check back later.</p>
+              <Button asChild variant="outline">
+                <Link href="/profile">Complete your profile</Link>
+              </Button>
+            </Card>
+          )}
         </div>
       </Layout>
     );

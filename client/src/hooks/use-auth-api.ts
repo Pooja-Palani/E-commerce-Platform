@@ -4,6 +4,7 @@ import { LoginRequest, RegisterRequest } from "@shared/schema";
 import { useAuthStore } from "@/store/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { getErrorMessage } from "@/lib/api-error";
 
 export function useAuth() {
   const setUser = useAuthStore((state) => state.setUser);
@@ -14,15 +15,14 @@ export function useAuth() {
     queryFn: async () => {
       try {
         const res = await fetch(api.auth.me.path, { credentials: "include" });
-        if (res.status === 401) {
-          setUser(null);
-          return null;
+        if (!res.ok) {
+          const message = await getErrorMessage(res, "Failed to fetch user");
+          throw new Error(message);
         }
-        if (!res.ok) throw new Error("Failed to fetch user");
         const data = await res.json();
         const parsed = api.auth.me.responses[200].parse(data);
-        setUser(parsed);
-        return parsed;
+        setUser(parsed ?? null);
+        return parsed ?? null;
       } catch (err) {
         setUser(null);
         return null;
@@ -47,8 +47,10 @@ export function useLogin() {
         body: JSON.stringify(data),
         credentials: "include",
       });
-      if (res.status === 401) throw new Error("Invalid credentials");
-      if (!res.ok) throw new Error("Login failed");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Login failed");
+        throw new Error(message);
+      }
       return api.auth.login.responses[200].parse(await res.json());
     },
     onSuccess: (user) => {
@@ -80,7 +82,10 @@ export function useRegister() {
         const err = api.auth.register.responses[400].parse(await res.json());
         throw new Error(err.message);
       }
-      if (!res.ok) throw new Error("Registration failed");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Registration failed");
+        throw new Error(message);
+      }
       return api.auth.register.responses[201].parse(await res.json());
     },
     onSuccess: (user) => {

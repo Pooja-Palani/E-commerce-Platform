@@ -107,24 +107,34 @@ export default function AdminUsers() {
                     </CardHeader>
                     <CardContent>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left">
+                            <table className="w-full text-sm text-left min-w-[1000px]">
                                 <thead className="bg-[#f8fafc] text-slate-500 uppercase text-[10px] font-bold tracking-wider">
                                     <tr>
                                         <th className="px-6 py-4 font-bold border-b">User Profile</th>
-                                        <th className="px-6 py-4 font-bold border-b">Community</th>
+                                        <th className="px-6 py-4 font-bold border-b">Community Name</th>
+                                        <th className="px-6 py-4 font-bold border-b">Location</th>
+                                        <th className="px-6 py-4 font-bold border-b min-w-[220px]">Address</th>
                                         <th className="px-6 py-4 font-bold border-b">Access Level</th>
-                                        <th className="px-6 py-4 font-bold border-b text-right">Administrative Actions</th>
+                                        <th className="px-6 py-4 font-bold border-b text-right whitespace-nowrap">Administrative Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {users?.map((user) => (
+                                    {users?.map((user) => {
+                                        const userCommunity = communities?.find((c) => c.id === user.communityId);
+                                        return (
                                         <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
                                             <td className="px-6 py-4">
                                                 <div className="font-bold text-slate-900">{user.fullName}</div>
                                                 <div className="text-slate-500 text-xs font-medium">{user.email}</div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <p className="text-slate-600 font-medium">{user.locality || "Independent"}</p>
+                                                <p className="text-slate-600 font-medium">{userCommunity?.name ?? "—"}</p>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <p className="text-slate-600 font-medium">{user.locality || "—"}</p>
+                                            </td>
+                                            <td className="px-6 py-4 min-w-[220px] max-w-[320px]">
+                                                <p className="text-slate-600 text-xs break-words" title={user.address || ""}>{user.address || "—"}</p>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <Badge
@@ -179,7 +189,7 @@ export default function AdminUsers() {
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))}
+                                    );})}
                                 </tbody>
                             </table>
                         </div>

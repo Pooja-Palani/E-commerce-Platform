@@ -2,6 +2,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { api, buildUrl } from "@shared/routes";
 import { PlatformSettings, UpdatePlatformSettingsRequest } from "@shared/schema";
+import { getErrorMessage } from "@/lib/api-error";
 
 interface AnalyticsResponse {
     metrics: {
@@ -21,7 +22,10 @@ export function useAdminAnalytics() {
         queryKey: ["/api/admin/analytics"],
         queryFn: async () => {
             const res = await fetch(api.admin.analytics.path);
-            if (!res.ok) throw new Error("Failed to fetch analytics");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to fetch analytics");
+        throw new Error(message);
+      }
             return res.json();
         },
     });
@@ -32,7 +36,10 @@ export function useAdminSettings() {
         queryKey: ["/api/admin/settings"],
         queryFn: async () => {
             const res = await fetch(api.admin.settings.get.path);
-            if (!res.ok) throw new Error("Failed to fetch settings");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to fetch settings");
+        throw new Error(message);
+      }
             return res.json();
         },
     });
@@ -49,10 +56,10 @@ export function useUpdateAdminSettings() {
                 body: JSON.stringify(data),
             });
 
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.message || "Failed to update settings");
-            }
+        if (!res.ok) {
+          const message = await getErrorMessage(res, "Failed to update settings");
+          throw new Error(message);
+        }
 
             return res.json() as Promise<PlatformSettings>;
         },

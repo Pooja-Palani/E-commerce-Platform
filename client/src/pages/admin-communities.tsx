@@ -1,11 +1,11 @@
 import { Layout } from "@/components/layout";
-import { useCommunities, useCreateCommunity, useDeleteCommunity } from "@/hooks/use-communities";
+import { useCommunities, useCreateCommunity, useDeleteCommunity, useCommunityMembers, useRemoveMemberFromCommunity, useAddMemberToCommunity } from "@/hooks/use-communities";
 import { useUsers } from "@/hooks/use-users";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, Plus, MapPin, Globe, Lock, Trash2 } from "lucide-react";
+import { Building2, Plus, MapPin, Globe, Lock, Trash2, UserPlus, Users } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -24,9 +24,13 @@ export default function AdminCommunities() {
     const createCommunity = useCreateCommunity();
     const deleteCommunity = useDeleteCommunity();
     const [isOpen, setIsOpen] = useState(false);
-    const { toast } = useToast();
     const [selectedCommunity, setSelectedCommunity] = useState<Community | null>(null);
     const [communityToDelete, setCommunityToDelete] = useState<string | null>(null);
+    const [addUserId, setAddUserId] = useState<string>("");
+    const { toast } = useToast();
+    const communityMembers = useCommunityMembers(selectedCommunity?.id);
+    const removeMember = useRemoveMemberFromCommunity(selectedCommunity?.id);
+    const addMember = useAddMemberToCommunity(selectedCommunity?.id);
 
     const form = useForm({
         resolver: zodResolver(insertCommunitySchema),
@@ -37,7 +41,6 @@ export default function AdminCommunities() {
             locality: "",
             address: "",
             description: "",
-            totalUnits: 0,
             contactEmail: "",
             contactPhone: "",
             facilities: "",
@@ -106,22 +109,13 @@ export default function AdminCommunities() {
                                         )} />
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <FormField control={form.control} name="locality" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel className="font-bold text-slate-700">Locality</FormLabel>
-                                                <FormControl><Input placeholder="e.g. Adyar" className="h-10 border-slate-200" {...field} value={field.value || ''} /></FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )} />
-                                        <FormField control={form.control} name="totalUnits" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel className="font-bold text-slate-700">Total Units</FormLabel>
-                                                <FormControl><Input type="number" className="h-10 border-slate-200" {...field} onChange={e => field.onChange(parseInt(e.target.value))} value={field.value || 0} /></FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )} />
-                                    </div>
+                                    <FormField control={form.control} name="locality" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="font-bold text-slate-700">Locality</FormLabel>
+                                            <FormControl><Input placeholder="e.g. Adyar" className="h-10 border-slate-200" {...field} value={field.value || ''} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
 
                                     <FormField control={form.control} name="address" render={({ field }) => (
                                         <FormItem>
@@ -251,11 +245,7 @@ export default function AdminCommunities() {
 
                         <div className="max-h-[70vh] overflow-y-auto mt-6 pr-4">
                             <div className="space-y-8">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Units</h4>
-                                        <p className="text-lg font-bold text-slate-900">{selectedCommunity?.totalUnits || "N/A"}</p>
-                                    </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
                                         <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status</h4>
                                         <p className="text-lg font-bold text-emerald-600">Active</p>
@@ -317,6 +307,68 @@ export default function AdminCommunities() {
                                             {selectedCommunity?.rules || "No rules established yet."}
                                         </p>
                                     </div>
+                                </div>
+
+                                <div className="space-y-3 pt-4 border-t border-slate-200">
+                                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                                        <Users className="w-4 h-4" /> Community Members
+                                    </h4>
+                                    {communityMembers.isLoading ? (
+                                        <p className="text-sm text-slate-500">Loading members...</p>
+                                    ) : (
+                                        <>
+                                            <ul className="space-y-2 max-h-48 overflow-y-auto">
+                                                {(communityMembers.data?.length ?? 0) === 0 ? (
+                                                    <li className="text-sm text-slate-500">No members in this community yet.</li>
+                                                ) : (
+                                                    communityMembers.data?.map((member) => (
+                                                        <li key={member.id} className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-slate-50 border border-slate-100">
+                                                            <div>
+                                                                <span className="font-medium text-slate-900">{member.fullName}</span>
+                                                                <span className="text-slate-500 text-xs ml-2">({member.email})</span>
+                                                                <Badge variant="outline" className="ml-2 text-[10px]">{member.role}</Badge>
+                                                            </div>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8"
+                                                                onClick={() => removeMember.mutate(member.id)}
+                                                                disabled={removeMember.isPending}
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
+                                                            </Button>
+                                                        </li>
+                                                    ))
+                                                )}
+                                            </ul>
+                                            <div className="flex flex-wrap items-center gap-2 pt-2">
+                                                <Select value={addUserId} onValueChange={setAddUserId}>
+                                                    <SelectTrigger className="w-[220px] h-9">
+                                                        <SelectValue placeholder="Select user to add..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {users?.filter((u) => !communityMembers.data?.some((m) => m.id === u.id)).map((u) => (
+                                                            <SelectItem key={u.id} value={u.id}>
+                                                                {u.fullName} ({u.email})
+                                                            </SelectItem>
+                                                        )) ?? null}
+                                                    </SelectContent>
+                                                </Select>
+                                                <Button
+                                                    size="sm"
+                                                    className="bg-[#1e3a8a] hover:bg-[#1e3a8a]/90 h-9"
+                                                    disabled={!addUserId || addUserId === "_none" || addMember.isPending}
+                                                    onClick={() => {
+                                                        if (addUserId && addUserId !== "_none") {
+                                                            addMember.mutate(addUserId, { onSuccess: () => setAddUserId("") });
+                                                        }
+                                                    }}
+                                                >
+                                                    <UserPlus className="w-4 h-4 mr-1" /> Add to community
+                                                </Button>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>

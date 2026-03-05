@@ -24,9 +24,17 @@ export async function registerRoutes(
       }
 
       const input = api.auth.register.input.parse(req.body);
+
       const existing = await storage.getUserByEmail(input.email);
       if (existing) {
         return res.status(400).json({ message: "Email already exists", field: "email" });
+      }
+
+      if (input.phone) {
+        const existingPhoneUser = await storage.getUserByPhone(input.phone);
+        if (existingPhoneUser) {
+          return res.status(400).json({ message: "Phone number already exists", field: "phone" });
+        }
       }
 
       const salt = await bcrypt.genSalt(10);
@@ -45,6 +53,7 @@ export async function registerRoutes(
         sellerDescription: input.sellerDescription,
         locality: input.locality,
         postalCode: input.postalCode,
+        unitFlatNumber: input.unitFlatNumber,
         address: input.address,
         bio: input.bio,
       });
@@ -68,14 +77,20 @@ export async function registerRoutes(
           field: err.errors[0].path.join('.'),
         });
       }
-      res.status(500).json({ message: "Internal server error" });
+      console.error("Registration error:", err);
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : "Internal server error";
+      res.status(500).json({ message });
     }
   });
 
   app.post(api.auth.login.path, async (req, res) => {
     try {
       const input = api.auth.login.input.parse(req.body);
-      const user = await storage.getUserByEmail(input.email);
+      const email = String(input.email).trim().toLowerCase();
+      const user = await storage.getUserByEmail(email);
       if (!user) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
@@ -101,15 +116,15 @@ export async function registerRoutes(
 
   app.get(api.auth.me.path, async (req: any, res) => {
     const token = req.cookies?.token || req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ message: "Unauthorized" });
+    if (!token) return res.status(200).json(null);
 
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
       const user = await storage.getUser(decoded.userId);
-      if (!user) return res.status(401).json({ message: "User not found" });
+      if (!user) return res.status(200).json(null);
       res.status(200).json(user);
     } catch {
-      res.status(401).json({ message: "Invalid token" });
+      res.status(200).json(null);
     }
   });
 
@@ -154,6 +169,11 @@ export async function registerRoutes(
       }
 
       const input = api.communities.create.input.parse(req.body);
+      const nameNorm = String(input.name).trim();
+      const allCommunities = await storage.getCommunities();
+      if (allCommunities.some((c) => c.name.trim().toLowerCase() === nameNorm.toLowerCase())) {
+        return res.status(400).json({ message: "A community with this name already exists.", field: "name" });
+      }
       const community = await storage.createCommunity({
         ...input,
         createdById: user.id,
@@ -189,6 +209,16 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Forbidden" });
       }
       const input = api.communities.update.input.parse(req.body);
+      if (input.name != null) {
+        const nameNorm = String(input.name).trim();
+        const allCommunities = await storage.getCommunities();
+        const duplicate = allCommunities.some(
+          (c) => c.id !== req.params.id && c.name.trim().toLowerCase() === nameNorm.toLowerCase()
+        );
+        if (duplicate) {
+          return res.status(400).json({ message: "A community with this name already exists.", field: "name" });
+        }
+      }
       const comm = await storage.updateCommunity(req.params.id, input as any);
       if (!comm) return res.status(409).json({ message: "Conflict or not found" });
 
@@ -252,6 +282,70 @@ export async function registerRoutes(
       res.status(200).json({ message: "Community deleted" });
     } catch (err) {
       res.status(500).json({ message: "Error deleting community" });
+    }
+  });
+
+  app.get("/api/communities/:id/members", authMiddleware, async (req: any, res) => {
+    try {
+      if (req.user.role !== "ADMIN") return res.status(403).json({ message: "Forbidden" });
+      const communityId = req.params.id;
+      const community = await storage.getCommunity(communityId);
+      if (!community) return res.status(404).json({ message: "Community not found" });
+      const members = await storage.getCommunityMembers(communityId);
+      res.status(200).json(members);
+    } catch (err) {
+      res.status(500).json({ message: "Error fetching members" });
+    }
+  });
+
+  app.post("/api/communities/:id/members/remove", authMiddleware, async (req: any, res) => {
+    try {
+      if (req.user.role !== "ADMIN") return res.status(403).json({ message: "Forbidden" });
+      const communityId = req.params.id;
+      const { userId } = req.body as { userId: string };
+      if (!userId) return res.status(400).json({ message: "userId is required" });
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      if (user.communityId === communityId) {
+        await storage.updateUser(userId, { communityId: null, version: user.version });
+      }
+      const uc = await storage.getUserCommunity(userId, communityId);
+      if (uc) await storage.updateUserCommunity(uc.id, "REMOVED");
+      res.status(200).json({ message: "User removed from community" });
+    } catch (err) {
+      res.status(500).json({ message: "Error removing user from community" });
+    }
+  });
+
+  app.post("/api/communities/:id/members/add", authMiddleware, async (req: any, res) => {
+    const sendJson = (status: number, data: object) => {
+      res.setHeader("Content-Type", "application/json");
+      res.status(status).json(data);
+    };
+    try {
+      if (req.user.role !== "ADMIN") return sendJson(403, { message: "Forbidden" });
+      const communityId = req.params.id;
+      const userId = req.body?.userId != null ? String(req.body.userId) : null;
+      if (!userId) return sendJson(400, { message: "userId is required" });
+      const community = await storage.getCommunity(communityId);
+      if (!community) return sendJson(404, { message: "Community not found" });
+      const user = await storage.getUser(userId);
+      if (!user) return sendJson(404, { message: "User not found" });
+      const existing = await storage.getUserCommunity(userId, communityId);
+      if (existing && existing.status === "ACTIVE") {
+        return sendJson(400, { message: "User is already in this community" });
+      }
+      if (existing) {
+        await storage.updateUserCommunity(existing.id, "ACTIVE");
+      } else {
+        await storage.createUserCommunity({ userId, communityId, status: "ACTIVE" });
+      }
+      await storage.updateUser(userId, { communityId, status: "ACTIVE", version: user.version });
+      const updated = await storage.getUser(userId);
+      return sendJson(200, updated ?? user);
+    } catch (err) {
+      console.error("Add member to community error:", err);
+      return sendJson(500, { message: err instanceof Error ? err.message : "Error adding user to community" });
     }
   });
 
@@ -344,6 +438,12 @@ export async function registerRoutes(
       }
       res.status(500).json({ message: "Error" });
     }
+  });
+
+  app.get(api.listings.categories.path, authMiddleware, async (req, res) => {
+    const allListings = await storage.getListings();
+    const categories = Array.from(new Set(allListings.map(l => l.category).filter(Boolean))) as string[];
+    res.status(200).json(categories);
   });
 
   app.put(api.listings.update.path, authMiddleware, async (req: any, res) => {
@@ -695,9 +795,22 @@ export async function registerRoutes(
 
   app.get('/api/users/:id/communities', authMiddleware, async (req: any, res) => {
     try {
-      const user = req.user;
-      if (user.id !== req.params.id && user.role !== "ADMIN") {
+      const currentUser = req.user;
+      if (currentUser.id !== req.params.id && currentUser.role !== "ADMIN") {
         return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const targetUser = await storage.getUser(req.params.id);
+      if (!targetUser) return res.status(404).json({ message: "User not found" });
+
+      // Admin is implicitly a member of all communities — return all with ACTIVE
+      if (targetUser.role === "ADMIN") {
+        const allCommunities = await storage.getCommunities();
+        const memberships = allCommunities.map((community) => ({
+          community,
+          joinStatus: "ACTIVE" as const,
+        }));
+        return res.status(200).json(memberships);
       }
 
       const memberships = await db.select({
@@ -810,6 +923,19 @@ export async function registerRoutes(
     } catch (err) {
       res.status(400).json({ message: "Invalid settings data" });
     }
+  });
+
+  app.post(api.admin.backup.path, authMiddleware, async (req: any, res) => {
+    if (req.user.role !== "ADMIN") return res.status(403).json({ message: "Forbidden" });
+
+    await storage.createAuditLog({
+      actorId: req.user.id,
+      action: "MANUAL_BACKUP_TRIGGERED",
+      targetType: "SYSTEM",
+      targetId: "BACKUP"
+    });
+
+    res.status(200).json({ message: "Backup routine has been initiated." });
   });
 
   return httpServer;

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-error";
 
 export function useForumPosts(communityId: string) {
     return useQuery({
@@ -8,7 +9,10 @@ export function useForumPosts(communityId: string) {
         queryFn: async () => {
             const url = buildUrl(api.communities.posts.list.path, { id: communityId });
             const res = await fetch(url, { credentials: "include" });
-            if (!res.ok) throw new Error("Failed to fetch posts");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to fetch posts");
+        throw new Error(message);
+      }
             return api.communities.posts.list.responses[200].parse(await res.json());
         },
         enabled: !!communityId,
@@ -21,7 +25,10 @@ export function usePost(postId: string) {
         queryFn: async () => {
             const url = buildUrl(api.posts.get.path, { id: postId });
             const res = await fetch(url, { credentials: "include" });
-            if (!res.ok) throw new Error("Failed to fetch post");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to fetch post");
+        throw new Error(message);
+      }
             return api.posts.get.responses[200].parse(await res.json());
         },
         enabled: !!postId,
@@ -34,7 +41,10 @@ export function useComments(postId: string) {
         queryFn: async () => {
             const url = buildUrl(api.posts.comments.list.path, { id: postId });
             const res = await fetch(url, { credentials: "include" });
-            if (!res.ok) throw new Error("Failed to fetch comments");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to fetch comments");
+        throw new Error(message);
+      }
             return api.posts.comments.list.responses[200].parse(await res.json());
         },
         enabled: !!postId,
@@ -54,7 +64,10 @@ export function useCreatePost(communityId: string) {
                 body: JSON.stringify(data),
                 credentials: "include",
             });
-            if (!res.ok) throw new Error("Failed to create post");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to create post");
+        throw new Error(message);
+      }
             return api.communities.posts.create.responses[201].parse(await res.json());
         },
         onSuccess: () => {
@@ -77,7 +90,10 @@ export function useCreateComment(postId: string) {
                 body: JSON.stringify(data),
                 credentials: "include",
             });
-            if (!res.ok) throw new Error("Failed to add comment");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to add comment");
+        throw new Error(message);
+      }
             return api.posts.comments.create.responses[201].parse(await res.json());
         },
         onSuccess: () => {

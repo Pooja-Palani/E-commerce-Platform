@@ -2,13 +2,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
 import { UpdateUserRequest } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-error";
 
 export function useUsers() {
   return useQuery({
     queryKey: [api.users.list.path],
     queryFn: async () => {
       const res = await fetch(api.users.list.path, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch users");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to fetch users");
+        throw new Error(message);
+      }
       return api.users.list.responses[200].parse(await res.json());
     },
     refetchInterval: 2000,
@@ -29,7 +33,10 @@ export function useUpdateUser() {
         credentials: "include",
       });
       if (res.status === 409) throw new Error("Conflict: User was modified recently.");
-      if (!res.ok) throw new Error("Failed to update user");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to update user");
+        throw new Error(message);
+      }
       return api.users.update.responses[200].parse(await res.json());
     },
     onSuccess: () => {
@@ -54,7 +61,10 @@ export function useDeleteUser() {
         method: api.users.delete.method,
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to remove user");
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to remove user");
+        throw new Error(message);
+      }
       return await res.json();
     },
     onSuccess: () => {

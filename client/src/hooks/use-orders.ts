@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/api-error";
 
 export function useCreateOrder() {
     const queryClient = useQueryClient();
@@ -14,7 +15,10 @@ export function useCreateOrder() {
                 body: JSON.stringify(data),
                 credentials: "include",
             });
-            if (!res.ok) throw new Error("Failed to create order");
+        if (!res.ok) {
+          const message = await getErrorMessage(res, "Failed to create order");
+          throw new Error(message);
+        }
             return api.orders.create.responses[201].parse(await res.json());
         },
         onSuccess: () => {
