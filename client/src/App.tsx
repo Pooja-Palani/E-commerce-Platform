@@ -40,6 +40,8 @@ import Profile from "./pages/profile";
 import Forum from "./pages/forum";
 import PostDetail from "./pages/post-detail";
 import ListingDetail from "./pages/listing-detail";
+import AcceptPayments from "./pages/accept-payments";
+import Orders from "./pages/orders";
 
 function ProtectedRoute({ component: Component, ...rest }: { component: React.ComponentType<any>, path: string }) {
   const { user, isLoading } = useAuthStore();
@@ -74,12 +76,17 @@ function Router() {
       <ProtectedRoute path="/activity" component={MyActivity} />
       <ProtectedRoute path="/my-services" component={MyServices} />
       <ProtectedRoute path="/my-products" component={MyProducts} />
+      {/* Listing create/edit flows */}
+      <ProtectedRoute path="/list-service/:id" component={ListService} />
       <ProtectedRoute path="/list-service" component={ListService} />
+      <ProtectedRoute path="/list-product/:id" component={ListProduct} />
       <ProtectedRoute path="/list-product" component={ListProduct} />
       <ProtectedRoute path="/cart" component={Cart} />
+      <ProtectedRoute path="/orders" component={Orders} />
       <ProtectedRoute path="/services" component={ServicesMarketplace} />
       <ProtectedRoute path="/products" component={ProductsMarketplace} />
       <ProtectedRoute path="/profile" component={Profile} />
+      <ProtectedRoute path="/accept-payments" component={AcceptPayments} />
       <ProtectedRoute path="/forum" component={Forum} />
       <ProtectedRoute path="/forum/post/:id" component={PostDetail} />
       <ProtectedRoute path="/community" component={CommunityMarketplace} />

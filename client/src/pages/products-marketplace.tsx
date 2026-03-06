@@ -1,26 +1,52 @@
 import { Layout } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Search, ShoppingBag, MapPin, Tag, Loader2, ShoppingCart, FileText } from "lucide-react";
-import { Link } from "wouter";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Search, ShoppingBag, MapPin, Loader2, ShoppingCart } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useListings } from "@/hooks/use-listings";
 import { useAdminSettings } from "@/hooks/use-admin";
 import { useAuthStore } from "@/store/use-auth";
+import { useCartStore } from "@/store/use-cart";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ProductsMarketplace() {
     const { data: listings, isLoading: loadingListings } = useListings();
     const { data: settings, isLoading: loadingSettings } = useAdminSettings();
     const user = useAuthStore(s => s.user!);
+    const addToCart = useCartStore((s) => s.addItem);
+    const [, setLocation] = useLocation();
+    const { toast } = useToast();
 
     const isLoading = loadingListings || loadingSettings;
 
     const products = listings?.filter(l => {
         if (l.listingType !== "PRODUCT" || l.status !== "ACTIVE") return false;
-        if (l.communityId !== user.communityId) return false; // Only show listings from user's current community
+        if (l.communityId !== user.communityId) return false;
         return true;
     }) || [];
+
+    const handleAddToCart = (e: React.MouseEvent, product: (typeof products)[0]) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const isStockProduct = product.availabilityBasis === "STOCK" && product.buyNowEnabled;
+        const stock = product.stockQuantity ?? 0;
+        const price = product.buyNowEnabled ? product.price : 0;
+        addToCart({
+            type: "product",
+            listingId: product.id,
+            title: product.title,
+            sellerId: product.sellerId,
+            sellerName: product.sellerNameSnapshot,
+            price,
+            quantity: isStockProduct ? Math.min(1, stock) : 1,
+            logisticsPreference: "PICKUP",
+        });
+        toast({ title: "Added to cart", description: "Go to Cart to checkout." });
+        setLocation("/cart");
+    };
 
     return (
         <Layout>
@@ -41,42 +67,59 @@ export default function ProductsMarketplace() {
                         <Loader2 className="w-8 h-8 animate-spin text-primary/50" />
                     </div>
                 ) : products.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                         {products.map((product) => (
-                            <Link key={product.id} href={`/listings/${product.id}`}>
-                                <Card className="border-border/50 shadow-sm overflow-hidden bg-white hover:shadow-md transition-all group cursor-pointer">
-                                    <div className="h-48 bg-muted/30 flex items-center justify-center relative">
-                                        <ShoppingBag className="w-16 h-16 text-primary/20 group-hover:scale-110 transition-transform" />
-                                        <div className="absolute top-3 right-3">
-                                            <Badge className="bg-primary text-white border-none shadow-sm capitalize">
-                                                {product.condition || "New"}
-                                            </Badge>
-                                        </div>
+                            <Card key={product.id} className="border-border/50 shadow-sm overflow-hidden bg-white hover:shadow-lg transition-all group">
+                                <Link href={`/listings/${product.id}`} className="block">
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <div className="cursor-pointer">
+                                                <div className="h-56 bg-muted/30 flex items-center justify-center relative overflow-hidden">
+                                                    {product.imageUrl ? (
+                                                        <img src={product.imageUrl} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                                    ) : (
+                                                        <ShoppingBag className="w-20 h-20 text-primary/20 group-hover:scale-110 transition-transform" />
+                                                    )}
+                                                    <div className="absolute top-3 right-3">
+                                                        <Badge className="bg-primary text-white border-none shadow-sm capitalize">
+                                                            {product.condition || "New"}
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+                                                <CardContent className="p-6">
+                                                    <div className="flex flex-col gap-2 mb-4">
+                                                        <span className="text-[10px] font-bold text-primary uppercase tracking-widest">
+                                                            {product.category || "General"}
+                                                        </span>
+                                                        <h3 className="text-lg font-bold line-clamp-2">{product.title}</h3>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-1 text-sm text-muted-foreground mb-4">
+                                                        <MapPin className="w-3.5 h-3.5 shrink-0" />
+                                                        <span className="truncate">{product.communityNameSnapshot}</span>
+                                                    </div>
+                                                </CardContent>
+                                            </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Click to view details</TooltipContent>
+                                    </Tooltip>
+                                </Link>
+                                <div className="px-6 pb-6 pt-0 -mt-2">
+                                    <div className="flex items-center justify-between pt-4 border-t border-border/40">
+                                        <span className="text-xl font-bold text-foreground">
+                                            {product.buyNowEnabled ? `₹${product.price}` : "Price on request"}
+                                        </span>
+                                        <Button
+                                            size="sm"
+                                            className="gap-2 font-bold rounded-lg"
+                                            onClick={(e) => handleAddToCart(e, product)}
+                                        >
+                                            <ShoppingCart className="w-4 h-4" />
+                                            Add to Cart
+                                        </Button>
                                     </div>
-                                    <CardContent className="p-5">
-                                        <div className="flex flex-col gap-1 mb-3">
-                                            <span className="text-[10px] font-bold text-primary uppercase tracking-widest">
-                                                {product.category || "General"}
-                                            </span>
-                                            <h3 className="text-md font-bold truncate">{product.title}</h3>
-                                        </div>
-
-                                        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-4">
-                                            <MapPin className="w-3 h-3" />
-                                            <span className="truncate">{product.communityNameSnapshot}</span>
-                                        </div>
-
-                                        <div className="flex items-center justify-between pt-4 border-t border-border/40">
-                                            <span className="text-xl font-bold text-foreground">
-                                                {product.buyNowEnabled ? `₹${product.price}` : "Price on request"}
-                                            </span>
-                                            <span className="inline-flex items-center gap-2 px-3 py-2 rounded-md font-bold text-xs bg-primary/5 text-primary border border-primary/10">
-                                                {product.buyNowEnabled ? <><ShoppingCart className="w-3.5 h-3.5" />Add</> : <><FileText className="w-3.5 h-3.5" />Request Quote</>}
-                                            </span>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </Link>
+                                </div>
+                            </Card>
                         ))}
                     </div>
                 ) : (

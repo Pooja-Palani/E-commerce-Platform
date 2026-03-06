@@ -21,7 +21,7 @@ export function useAdminAnalytics() {
     return useQuery<AnalyticsResponse, Error>({
         queryKey: ["/api/admin/analytics"],
         queryFn: async () => {
-            const res = await fetch(api.admin.analytics.path);
+            const res = await fetch(api.admin.analytics.path, { credentials: "include" });
       if (!res.ok) {
         const message = await getErrorMessage(res, "Failed to fetch analytics");
         throw new Error(message);

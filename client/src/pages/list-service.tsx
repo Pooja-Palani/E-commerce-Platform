@@ -14,10 +14,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertListingSchema } from "@shared/schema";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
-import { useLocation } from "wouter";
-import { Link } from "wouter";
+import { useLocation, useParams, Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateUser } from "@/hooks/use-users";
+import { useListing, useUpdateListing } from "@/hooks/use-listings";
 import { Loader2, ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { ImagePicker } from "@/components/image-picker";
 import { z } from "zod";
@@ -25,9 +25,15 @@ import { z } from "zod";
 export default function ListService() {
     const user = useAuthStore(s => s.user);
     const [, setLocation] = useLocation();
+    const params = useParams<{ id?: string }>();
+    const editingListingId = params?.id;
+    const isEditing = !!editingListingId;
+
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const updateUser = useUpdateUser();
+    const { data: existingListing, isLoading: loadingListing } = useListing(editingListingId || "");
+    const updateListing = useUpdateListing();
 
     const form = useForm({
         resolver: zodResolver(insertListingSchema.extend({
@@ -61,6 +67,43 @@ export default function ListService() {
         }
     });
 
+    useEffect(() => {
+        if (isEditing && existingListing) {
+            const toInputDate = (value: any) => {
+                if (!value) return "";
+                const d = typeof value === "string" ? new Date(value) : value;
+                if (Number.isNaN(d.getTime())) return "";
+                return d.toISOString().split("T")[0];
+            };
+
+            const knownCategories = ["Home Maintenance", "Tutoring", "Personal Care", "Pet Services", "Other"];
+            let category: string | undefined = (existingListing as any).category || "";
+            let customCategory = "";
+            if (category && !knownCategories.includes(category)) {
+                customCategory = category;
+                category = "Other";
+            }
+
+            form.reset({
+                title: existingListing.title || "",
+                description: existingListing.description || "",
+                price: existingListing.price ?? 0,
+                listingType: "SERVICE",
+                communityId: existingListing.communityId,
+                sellerId: existingListing.sellerId,
+                availabilityBasis: existingListing.availabilityBasis ?? "FOREVER",
+                startDate: toInputDate((existingListing as any).startDate),
+                endDate: toInputDate((existingListing as any).endDate),
+                stockQuantity: existingListing.stockQuantity ?? null,
+                customCategory,
+                duration: existingListing.duration || "",
+                mode: existingListing.mode || "On-site",
+                imageUrl: existingListing.imageUrl ?? null,
+                category: category as any,
+            } as any);
+        }
+    }, [isEditing, existingListing, form]);
+
     const [slots, setSlots] = useState<{ startTime: string; endTime: string }[]>([]);
 
     useEffect(() => {
@@ -72,7 +115,7 @@ export default function ListService() {
     const updateSlot = (i: number, field: "startTime" | "endTime", value: string) =>
         setSlots((s) => s.map((slot, j) => (j === i ? { ...slot, [field]: value } : slot)));
 
-    const mutation = useMutation({
+    const createMutation = useMutation({
         mutationFn: async (data: any) => {
             const res = await fetch(api.listings.create.path, {
                 method: api.listings.create.method,
@@ -101,7 +144,46 @@ export default function ListService() {
         }
     });
 
+    const handleSubmit = (data: any) => {
+        const payload: any = { ...data, sellerId: user!.id };
+        if (payload.category === "Other" && payload.customCategory) {
+            payload.category = payload.customCategory.trim();
+        }
+        delete payload.customCategory;
+        if (!payload.imageUrl) delete payload.imageUrl;
+
+        if (isEditing && existingListing) {
+            updateListing.mutate(
+                {
+                    id: existingListing.id,
+                    data: { ...payload, version: existingListing.version },
+                },
+                {
+                    onSuccess: () => {
+                        toast({ title: "Service updated", description: "Your changes have been saved." });
+                        queryClient.invalidateQueries({ queryKey: ["/api/my-listings"] });
+                        setLocation("/my-services");
+                    },
+                }
+            );
+        } else {
+            createMutation.mutate(payload);
+        }
+    };
+
+    const isSubmitting = isEditing ? updateListing.isPending : createMutation.isPending;
+
     if (!user) return null;
+
+    if (isEditing && loadingListing) {
+        return (
+            <Layout>
+                <div className="max-w-3xl mx-auto pb-20 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary/60" />
+                </div>
+            </Layout>
+        );
+    }
 
     if (!user.isSeller) {
         return (
@@ -146,21 +228,15 @@ export default function ListService() {
                     </Link>
                 </div>
                 <div className="flex flex-col gap-1 mb-8">
-                    <h1 className="text-3xl font-bold tracking-tight">List a Service</h1>
-                    <p className="text-muted-foreground text-sm">Offer a service to your community (requires approval)</p>
+                    <h1 className="text-3xl font-bold tracking-tight">{isEditing ? "Edit Service" : "List a Service"}</h1>
+                    <p className="text-muted-foreground text-sm">
+                        {isEditing ? "Update details for this service listing." : "Offer a service to your community (requires approval)"}
+                    </p>
                 </div>
 
                 <Card className="border-border/50 shadow-sm bg-white">
                     <CardContent className="p-8">
-                        <form onSubmit={form.handleSubmit((data) => {
-                            const payload = { ...data, sellerId: user!.id };
-                            if (payload.category === "Other" && payload.customCategory) {
-                                payload.category = (payload as any).customCategory.trim();
-                            }
-                            delete (payload as any).customCategory;
-                            if (!(payload as any).imageUrl) delete (payload as any).imageUrl;
-                            mutation.mutate(payload);
-                        })} className="space-y-6">
+                        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
                             <div className="space-y-4">
                                 <ImagePicker
                                     value={form.watch("imageUrl" as any)}
@@ -378,15 +454,15 @@ export default function ListService() {
                             <Button
                                 type="submit"
                                 className="w-full h-12 text-md font-bold shadow-md bg-primary hover:bg-primary/90 disabled:opacity-70 disabled:bg-primary"
-                                disabled={mutation.isPending}
+                                disabled={isSubmitting}
                             >
-                                {mutation.isPending ? (
+                                {isSubmitting ? (
                                     <>
                                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                        Submitting...
+                                        {isEditing ? "Saving..." : "Submitting..."}
                                     </>
                                 ) : (
-                                    "Submit for approval"
+                                    isEditing ? "Save changes" : "Submit for approval"
                                 )}
                             </Button>
                         </form>

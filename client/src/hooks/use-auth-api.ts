@@ -100,6 +100,54 @@ export function useRegister() {
   });
 }
 
+export function useRequestOtp() {
+  return useMutation({
+    mutationFn: async (email: string) => {
+      const res = await fetch("/api/auth/request-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to send OTP");
+      }
+      return res.json();
+    },
+  });
+}
+
+export function useLoginWithOtp() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+
+  return useMutation({
+    mutationFn: async ({ email, otp }: { email: string; otp: string }) => {
+      const res = await fetch("/api/auth/login-with-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), otp: otp.trim() }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Invalid OTP");
+      }
+      return res.json();
+    },
+    onSuccess: (user) => {
+      queryClient.setQueryData([api.auth.me.path], user);
+      useAuthStore.getState().setUser(user);
+      setLocation("/");
+      toast({ title: "Signed in", description: `Welcome, ${user.fullName}` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "OTP login failed", description: err.message, variant: "destructive" });
+    },
+  });
+}
+
 export function useLogout() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();

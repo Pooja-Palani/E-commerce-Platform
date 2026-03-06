@@ -14,8 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertListingSchema } from "@shared/schema";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
-import { useLocation } from "wouter";
-import { Link } from "wouter";
+import { useLocation, useParams, Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useUserCommunities } from "@/hooks/use-communities";
 import { useUpdateUser } from "@/hooks/use-users";
@@ -23,14 +22,20 @@ import { Loader2, ArrowLeft, FileText } from "lucide-react";
 import { ImagePicker } from "@/components/image-picker";
 import { z } from "zod";
 import { Switch } from "@/components/ui/switch";
+import { useListing, useUpdateListing } from "@/hooks/use-listings";
 
 export default function ListProduct() {
     const user = useAuthStore(s => s.user);
     const [, setLocation] = useLocation();
+    const params = useParams<{ id?: string }>();
+    const editingListingId = params?.id;
+    const isEditing = !!editingListingId;
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const { data: userCommunities } = useUserCommunities(user?.id ?? "");
     const updateUser = useUpdateUser();
+    const { data: existingListing, isLoading: loadingListing } = useListing(editingListingId || "");
+    const updateListing = useUpdateListing();
 
     const communities = (userCommunities ?? [])
         .filter((m: { joinStatus: string }) => m.joinStatus === "ACTIVE")
@@ -78,7 +83,43 @@ export default function ListProduct() {
         if (user?.id) form.setValue("sellerId" as any, user.id);
     }, [user?.communityId, user?.id, communities, form]);
 
-    const mutation = useMutation({
+    useEffect(() => {
+        if (isEditing && existingListing) {
+            const toInputDate = (value: any) => {
+                if (!value) return "";
+                const d = typeof value === "string" ? new Date(value) : value;
+                if (Number.isNaN(d.getTime())) return "";
+                return d.toISOString().split("T")[0];
+            };
+
+            const knownCategories = ["Home & Kitchen", "Electronics", "Furniture", "Books", "Other"];
+            let category: string | undefined = (existingListing as any).category || "";
+            let customCategory = "";
+            if (category && !knownCategories.includes(category)) {
+                customCategory = category;
+                category = "Other";
+            }
+
+            form.reset({
+                title: existingListing.title || "",
+                description: existingListing.description || "",
+                price: existingListing.price ?? 0,
+                listingType: "PRODUCT",
+                communityId: existingListing.communityId,
+                sellerId: existingListing.sellerId,
+                availabilityBasis: existingListing.availabilityBasis ?? "FOREVER",
+                startDate: toInputDate((existingListing as any).startDate),
+                endDate: toInputDate((existingListing as any).endDate),
+                stockQuantity: existingListing.stockQuantity ?? null,
+                buyNowEnabled: existingListing.buyNowEnabled,
+                customCategory,
+                imageUrl: existingListing.imageUrl ?? null,
+                category: category as any,
+            } as any);
+        }
+    }, [isEditing, existingListing, form]);
+
+    const createMutation = useMutation({
         mutationFn: async (data: any) => {
             const res = await fetch(api.listings.create.path, {
                 method: api.listings.create.method,
@@ -102,7 +143,49 @@ export default function ListProduct() {
         },
     });
 
+    const handleSubmit = (data: any) => {
+        const payload: any = { ...data, sellerId: user!.id };
+        if (!payload.buyNowEnabled) {
+            payload.price = 0;
+        }
+        if (payload.category === "Other" && payload.customCategory) {
+            payload.category = payload.customCategory.trim();
+        }
+        delete payload.customCategory;
+        if (!payload.imageUrl) delete payload.imageUrl;
+
+        if (isEditing && existingListing) {
+            updateListing.mutate(
+                {
+                    id: existingListing.id,
+                    data: { ...payload, version: existingListing.version },
+                },
+                {
+                    onSuccess: () => {
+                        toast({ title: "Product updated", description: "Your changes have been saved." });
+                        queryClient.invalidateQueries({ queryKey: ["/api/my-listings"] });
+                        setLocation("/my-products");
+                    },
+                }
+            );
+        } else {
+            createMutation.mutate(payload);
+        }
+    };
+
+    const isSubmitting = isEditing ? updateListing.isPending : createMutation.isPending;
+
     if (!user) return null;
+
+    if (isEditing && loadingListing) {
+        return (
+            <Layout>
+                <div className="max-w-3xl mx-auto pb-20 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary/60" />
+                </div>
+            </Layout>
+        );
+    }
 
     if (!user.isSeller) {
         return (
@@ -147,25 +230,16 @@ export default function ListProduct() {
                     </Link>
                 </div>
                 <div className="flex flex-col gap-1 mb-8">
-                    <h1 className="text-3xl font-bold tracking-tight">List a Product</h1>
-                    <p className="text-muted-foreground text-sm">Sell an item to your community members</p>
+                    <h1 className="text-3xl font-bold tracking-tight">{isEditing ? "Edit Product" : "List a Product"}</h1>
+                    <p className="text-muted-foreground text-sm">
+                        {isEditing ? "Update details for this product listing." : "Sell an item to your community members"}
+                    </p>
                 </div>
 
                 <Card className="border-border/50 shadow-sm bg-white">
                     <CardContent className="p-8">
                         <form onSubmit={form.handleSubmit(
-                            (data) => {
-                                const payload = { ...data, sellerId: user!.id };
-                                if (!payload.buyNowEnabled) {
-                                    payload.price = 0;
-                                }
-                                if (payload.category === "Other" && payload.customCategory) {
-                                    payload.category = (payload as any).customCategory.trim();
-                                }
-                                delete (payload as any).customCategory;
-                                if (!(payload as any).imageUrl) delete (payload as any).imageUrl;
-                                mutation.mutate(payload);
-                            },
+                            handleSubmit,
                             (errors) => {
                                 const entries = Object.entries(errors);
                                 const [firstKey, firstError] = entries[0] ?? [];
@@ -349,15 +423,15 @@ export default function ListProduct() {
                             <Button
                                 type="submit"
                                 className="w-full h-12 text-md font-bold shadow-md bg-primary hover:bg-primary/90 disabled:opacity-70 disabled:bg-primary"
-                                disabled={mutation.isPending}
+                                disabled={isSubmitting}
                             >
-                                {mutation.isPending ? (
+                                {isSubmitting ? (
                                     <>
                                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                        Posting Listing...
+                                        {isEditing ? "Saving..." : "Posting Listing..."}
                                     </>
                                 ) : (
-                                    "Post Product Listing"
+                                    isEditing ? "Save changes" : "Post Product Listing"
                                 )}
                             </Button>
                         </form>

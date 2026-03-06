@@ -36,6 +36,7 @@ export default function AdminCommunities() {
         resolver: zodResolver(insertCommunitySchema),
         defaultValues: {
             name: "",
+            parentId: null as string | null,
             visibility: "PUBLIC",
             status: "ACTIVE",
             locality: "",
@@ -47,6 +48,14 @@ export default function AdminCommunities() {
             rules: ""
         }
     });
+
+    const topLevelCommunities = (communities ?? []).filter(c => !c.parentId);
+    const communitiesByParent = (communities ?? []).reduce<Record<string, Community[]>>((acc, c) => {
+        const pid = c.parentId ?? "_root";
+        if (!acc[pid]) acc[pid] = [];
+        acc[pid].push(c);
+        return acc;
+    }, {});
 
     const onSubmit = (data: any) => {
         createCommunity.mutate(data, {
@@ -86,6 +95,21 @@ export default function AdminCommunities() {
                             </DialogHeader>
                             <Form {...form}>
                                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-4 pb-4">
+                                    <FormField control={form.control} name="parentId" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="font-bold text-slate-700">Parent Community (optional – sub-community)</FormLabel>
+                                            <Select onValueChange={(v) => field.onChange(v === "__none__" ? null : v)} value={field.value ?? "__none__"}>
+                                                <FormControl><SelectTrigger className="h-10 border-slate-200"><SelectValue placeholder="None (top-level community)" /></SelectTrigger></FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="__none__">None (top-level community)</SelectItem>
+                                                    {topLevelCommunities.map(c => (
+                                                        <SelectItem key={c.id} value={c.id}>{c.name} ({c.locality || "—"})</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
                                     <div className="grid grid-cols-2 gap-4">
                                         <FormField control={form.control} name="name" render={({ field }) => (
                                             <FormItem>
@@ -176,36 +200,38 @@ export default function AdminCommunities() {
                     </Dialog>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {communities?.map((community) => (
-                        <Card key={community.id} className="border-border/50 shadow-sm hover:shadow-md transition-all group overflow-hidden">
-                            <div className="h-2 bg-[#1e3a8a] opacity-0 group-hover:opacity-100 transition-all" />
-                            <CardHeader className="pb-4">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <CardTitle className="text-lg font-bold text-slate-900">{community.name}</CardTitle>
-                                        <div className="flex items-center gap-1.5 text-slate-500 text-xs font-medium mt-1">
-                                            <MapPin className="w-3.5 h-3.5" /> {community.locality || "Unspecified Locality"}
+                <div className="space-y-8">
+                    {topLevelCommunities.map((community) => (
+                        <div key={community.id} className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <Card className="border-border/50 shadow-sm hover:shadow-md transition-all group overflow-hidden">
+                                    <div className="h-2 bg-[#1e3a8a] opacity-0 group-hover:opacity-100 transition-all" />
+                                    <CardHeader className="pb-4">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <CardTitle className="text-lg font-bold text-slate-900">{community.name}</CardTitle>
+                                                <div className="flex items-center gap-1.5 text-slate-500 text-xs font-medium mt-1">
+                                                    <MapPin className="w-3.5 h-3.5" /> {community.locality || "Unspecified Locality"}
+                                                </div>
+                                            </div>
+                                            <Badge variant="outline" className={`font-bold text-[10px] uppercase tracking-wider ${community.visibility === 'PUBLIC' ? 'border-blue-200 text-blue-700 bg-blue-50' : 'border-amber-200 text-amber-700 bg-amber-50'}`}>
+                                                {community.visibility === 'PUBLIC' ? <Globe className="w-3 h-3 mr-1 inline" /> : <Lock className="w-3 h-3 mr-1 inline" />}
+                                                {community.visibility}
+                                            </Badge>
                                         </div>
-                                    </div>
-                                    <Badge variant="outline" className={`font-bold text-[10px] uppercase tracking-wider ${community.visibility === 'PUBLIC' ? 'border-blue-200 text-blue-700 bg-blue-50' : 'border-amber-200 text-amber-700 bg-amber-50'}`}>
-                                        {community.visibility === 'PUBLIC' ? <Globe className="w-3 h-3 mr-1 inline" /> : <Lock className="w-3 h-3 mr-1 inline" />}
-                                        {community.visibility}
-                                    </Badge>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                                        {community.description || "No description provided for this residential complex."}
-                                    </p>
-                                    <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 text-xs font-bold text-[#1e3a8a] hover:bg-[#1e3a8a]/5"
-                                                onClick={() => setSelectedCommunity(community)}
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-4">
+                                            <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                                                {community.description || "No description provided for this residential complex."}
+                                            </p>
+                                            <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-8 text-xs font-bold text-[#1e3a8a] hover:bg-[#1e3a8a]/5"
+                                                        onClick={() => setSelectedCommunity(community)}
                                             >
                                                 View Details
                                             </Button>
@@ -222,6 +248,34 @@ export default function AdminCommunities() {
                                 </div>
                             </CardContent>
                         </Card>
+                            </div>
+                            {(communitiesByParent[community.id] ?? []).length > 0 && (
+                                <div className="pl-4 border-l-2 border-slate-200 space-y-2">
+                                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Sub-communities of {community.name}</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {(communitiesByParent[community.id] ?? []).map((sub) => (
+                                            <Card key={sub.id} className="border-border/50 shadow-sm hover:shadow-md transition-all border-l-4 border-l-primary/30">
+                                                <CardHeader className="pb-2">
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <CardTitle className="text-base font-bold text-slate-900">↳ {sub.name}</CardTitle>
+                                                            <div className="text-slate-500 text-xs font-medium mt-1"><MapPin className="w-3.5 h-3.5 inline" /> {sub.locality || "—"}</div>
+                                                        </div>
+                                                        <Badge variant="outline" className="text-[10px]">Sub</Badge>
+                                                    </div>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <div className="flex items-center justify-between">
+                                                        <Button variant="ghost" size="sm" className="text-xs font-bold text-[#1e3a8a]" onClick={() => setSelectedCommunity(sub)}>View Details</Button>
+                                                        <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50" onClick={() => setCommunityToDelete(sub.id)}><Trash2 className="w-4 h-4" /></Button>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     ))}
                 </div>
 

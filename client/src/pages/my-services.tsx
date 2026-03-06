@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Wrench, Loader2, Calendar } from "lucide-react";
+import { Plus, Wrench, Loader2, Calendar, Eye, BarChart3 } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { useSellerBookings, useUpdateBookingStatus } from "@/hooks/use-bookings";
@@ -40,6 +40,16 @@ export default function MyServices() {
                     <div className="flex flex-col gap-1">
                         <h1 className="text-3xl font-bold tracking-tight">My Services</h1>
                         <p className="text-muted-foreground text-sm">Services you've listed — pending or live</p>
+                        {!isLoading && services.length > 0 && (
+                            <p className="text-muted-foreground text-sm mt-1 flex items-center gap-1.5">
+                                <BarChart3 className="w-4 h-4" />
+                                <span className="font-medium text-foreground">{services.length}</span> service{services.length !== 1 ? "s" : ""} listed
+                                <span className="text-muted-foreground">·</span>
+                                <span className="font-medium text-foreground">
+                                    {services.filter((s: any) => (s.status || "").toLowerCase() === "active").length}
+                                </span> active
+                            </p>
+                        )}
                     </div>
                     <Link href="/list-service">
                         <Button className="bg-primary hover:bg-primary/90 font-bold px-6 shadow-sm">
@@ -50,7 +60,7 @@ export default function MyServices() {
                 </div>
 
                 {sellerBookings.length > 0 && (
-                    <Card className="border-border/50 shadow-sm overflow-hidden bg-white">
+                    <Card id="seller-bookings" className="border-border/50 shadow-sm overflow-hidden bg-white scroll-mt-6">
                         <CardContent className="p-0">
                             <div className="bg-muted/5 border-b border-border/40 py-4 px-6">
                                 <div className="flex items-center gap-2">
@@ -124,14 +134,45 @@ export default function MyServices() {
                                     <p className="text-sm text-muted-foreground line-clamp-2 min-h-[40px] mb-4">
                                         {service.description}
                                     </p>
-                                    <div className="flex items-center justify-between pt-4 border-t border-border/40">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Price</span>
-                                            <span className="text-lg font-bold text-primary">₹{service.price}</span>
+                                    <div className="flex flex-col gap-3 pt-4 border-t border-border/40">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Price</span>
+                                                <span className="text-lg font-bold text-primary">₹{service.price}</span>
+                                            </div>
+                                            {(() => {
+                                                const bookingCount = sellerBookings.filter((b: any) => b.listingId === service.id).length;
+                                                return bookingCount > 0 ? (
+                                                    <span className="text-xs font-medium text-muted-foreground">
+                                                        {bookingCount} booking{bookingCount !== 1 ? "s" : ""}
+                                                    </span>
+                                                ) : null;
+                                            })()}
                                         </div>
-                                        <Link href={`/listings/${service.id}`}>
-                                            <Button variant="outline" size="sm" className="font-bold text-xs h-8">Edit Listing</Button>
-                                        </Link>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Link href={`/listings/${service.id}`}>
+                                                <Button variant="outline" size="sm" className="font-bold text-xs h-8 gap-1.5">
+                                                    <Eye className="w-3.5 h-3.5" />
+                                                    View details
+                                                </Button>
+                                            </Link>
+                                            <Link href={`/list-service/${service.id}`}>
+                                                <Button variant="outline" size="sm" className="font-bold text-xs h-8">
+                                                    Edit Listing
+                                                </Button>
+                                            </Link>
+                                            {sellerBookings.some((b: any) => b.listingId === service.id) && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="font-bold text-xs h-8 text-primary hover:text-primary"
+                                                    onClick={() => document.getElementById("seller-bookings")?.scrollIntoView({ behavior: "smooth" })}
+                                                >
+                                                    <Calendar className="w-3.5 h-3.5 mr-1" />
+                                                    View bookings
+                                                </Button>
+                                            )}
+                                        </div>
                                     </div>
                                 </CardContent>
                             </Card>

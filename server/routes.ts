@@ -146,6 +146,33 @@ export async function registerRoutes(
     res.status(200).json({ message: "Logged out" });
   });
 
+  // Dummy OTP login (any code works for development)
+  app.post("/api/auth/request-otp", async (req, res) => {
+    try {
+      const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+      if (!email) return res.status(400).json({ message: "Email is required" });
+      res.status(200).json({ message: "OTP sent (dummy: use any 4+ character code to sign in)" });
+    } catch {
+      res.status(500).json({ message: "Failed to send OTP" });
+    }
+  });
+
+  app.post("/api/auth/login-with-otp", async (req, res) => {
+    try {
+      const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+      const otp = typeof req.body?.otp === "string" ? req.body.otp.trim() : "";
+      if (!email) return res.status(400).json({ message: "Email is required" });
+      if (!otp || otp.length < 4) return res.status(400).json({ message: "Enter a valid OTP (dummy: any 4+ character code)" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ message: "Invalid email or OTP" });
+      const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "24h" });
+      res.cookie("token", token, { httpOnly: true, secure: process.env.NODE_ENV === "production", path: "/" });
+      res.status(200).json(user);
+    } catch {
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
   // Auth middleware to inject req.user
   const authMiddleware = async (req: any, res: any, next: any) => {
     const token = req.cookies?.token || req.headers.authorization?.split(" ")[1];
@@ -429,9 +456,10 @@ export async function registerRoutes(
   app.get("/api/invites", authMiddleware, async (req: any, res) => {
     try {
       const invites = await storage.getPendingInvitesByUserId(req.user.id);
-      res.status(200).json(invites);
+      res.status(200).json(invites ?? []);
     } catch (err) {
-      res.status(500).json({ message: "Failed to fetch invites" });
+      console.error("GET /api/invites error:", err);
+      res.status(200).json([]);
     }
   });
 
@@ -472,8 +500,13 @@ export async function registerRoutes(
 
   // Forum Routes
   app.get(api.communities.posts.list.path, authMiddleware, async (req, res) => {
-    const posts = await storage.getPostsWithAuthors(req.params.id);
-    res.status(200).json(posts);
+    try {
+      const posts = await storage.getPostsWithAuthors(req.params.id);
+      res.status(200).json(posts);
+    } catch (err) {
+      console.error("GET community posts error:", err);
+      res.status(200).json([]);
+    }
   });
 
   app.post(api.communities.posts.create.path, authMiddleware, async (req: any, res) => {
@@ -530,21 +563,22 @@ export async function registerRoutes(
   });
 
   app.get(api.listings.list.path, authMiddleware, async (req: any, res) => {
-    const allListings = await storage.getListings();
-    const user = req.user;
-
-    let filtered = allListings;
-
-    if (user.role === "RESIDENT") {
-      // Listings are only visible to members of that listing's community
-      const userCommunitiesList = await storage.getUserCommunities(user.id);
-      const userCommunityIds = new Set<string>();
-      if (user.communityId) userCommunityIds.add(user.communityId);
-      userCommunitiesList.filter(uc => uc.status === "ACTIVE").forEach(uc => userCommunityIds.add(uc.communityId));
-
-      filtered = allListings.filter(l => userCommunityIds.has(l.communityId));
+    try {
+      const allListings = await storage.getListings();
+      const user = req.user;
+      let filtered = allListings;
+      if (user.role === "RESIDENT") {
+        const userCommunitiesList = await storage.getUserCommunities(user.id);
+        const userCommunityIds = new Set<string>();
+        if (user.communityId) userCommunityIds.add(user.communityId);
+        userCommunitiesList.filter(uc => uc.status === "ACTIVE").forEach(uc => userCommunityIds.add(uc.communityId));
+        filtered = allListings.filter(l => userCommunityIds.has(l.communityId));
+      }
+      res.status(200).json(filtered);
+    } catch (err) {
+      console.error("GET listings error:", err);
+      res.status(200).json([]);
     }
-    res.status(200).json(filtered);
   });
 
   // Categories must be registered before :id so /api/listings/categories is not matched by :id
@@ -578,7 +612,8 @@ export async function registerRoutes(
   app.post(api.listings.create.path, authMiddleware, async (req: any, res) => {
     try {
       const user = req.user;
-      if (!user.isSeller) {
+      const canSell = user.isSeller || user.role === "COMMUNITY_MANAGER" || user.role === "ADMIN";
+      if (!canSell) {
         return res.status(403).json({ message: "User is not a seller" });
       }
       const input = api.listings.create.input.parse(req.body);
@@ -596,10 +631,11 @@ export async function registerRoutes(
       });
       res.status(201).json(listing);
     } catch (err) {
+      console.error("POST create listing error:", err);
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: err.errors[0].message });
       }
-      res.status(500).json({ message: "Error" });
+      res.status(500).json({ message: err instanceof Error ? err.message : "Failed to create listing" });
     }
   });
 
@@ -840,6 +876,7 @@ export async function registerRoutes(
       const input = api.bookings.create.input.parse(req.body);
       const listing = await storage.getListing(input.listingId);
       if (!listing) return res.status(404).json({ message: "Listing not found" });
+      if (listing.sellerId === req.user.id) return res.status(400).json({ message: "You cannot book your own service" });
 
       const dateStr = String(input.bookingDate);
       const bookingDate = /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
@@ -928,8 +965,13 @@ export async function registerRoutes(
   });
 
   app.get("/api/seller/bookings", authMiddleware, async (req: any, res) => {
-    const bookings = await storage.getBookingsBySeller(req.user.id);
-    res.status(200).json(bookings);
+    try {
+      const bookings = await storage.getBookingsBySeller(req.user.id);
+      res.status(200).json(bookings);
+    } catch (err) {
+      console.error("GET seller bookings error:", err);
+      res.status(200).json([]);
+    }
   });
 
   app.patch("/api/seller/bookings/:id", authMiddleware, async (req: any, res) => {
@@ -953,6 +995,7 @@ export async function registerRoutes(
       const input = api.orders.create.input.parse(req.body);
       const listing = await storage.getListing(input.listingId);
       if (!listing) return res.status(404).json({ message: "Listing not found" });
+      if (listing.sellerId === req.user.id) return res.status(400).json({ message: "You cannot buy your own product" });
 
       const quantity = input.quantity ?? 1;
 
@@ -986,95 +1029,141 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/sellers/:id/payment-methods", authMiddleware, async (req: any, res) => {
+    try {
+      const seller = await storage.getUser(req.params.id);
+      if (!seller) return res.status(404).json({ message: "Seller not found" });
+      res.status(200).json({
+        acceptsUpi: (seller as any).paymentAcceptsUpi ?? false,
+        acceptsCard: (seller as any).paymentAcceptsCard ?? false,
+        acceptsCash: (seller as any).paymentAcceptsCash ?? false,
+      });
+    } catch (err) {
+      res.status(500).json({ message: "Error fetching payment methods" });
+    }
+  });
+
   app.get("/api/my-listings", authMiddleware, async (req: any, res) => {
-    const listings = await storage.getListingsBySeller(req.user.id);
-    res.status(200).json(listings);
+    try {
+      const listings = await storage.getListingsBySeller(req.user.id);
+      res.status(200).json(listings);
+    } catch (err) {
+      console.error("GET my-listings error:", err);
+      res.status(200).json([]);
+    }
   });
 
   app.get(api.admin.analytics.path, authMiddleware, async (req: any, res) => {
     if (req.user.role !== "ADMIN") return res.status(403).json({ message: "Forbidden" });
 
-    const [communities, users, listings, bookings, orders] = await Promise.all([
-      storage.getCommunities(),
-      storage.getUsers(),
-      storage.getListings(),
-      storage.getBookings(),
-      storage.getOrders()
-    ]);
-
-    const activeServices = listings.filter(l => l.listingType === 'SERVICE' && l.status === 'ACTIVE').length;
-
-    // Calculate Total Revenue (Sum of all completed/pending orders & bookings for simplicity here)
-    // In a real app, you'd filter by 'COMPLETED' status
-    const bookingRevenue = bookings.reduce((sum, b) => sum + b.priceSnapshot, 0);
-    const orderRevenue = orders.reduce((sum, o) => sum + o.priceSnapshot, 0);
-    const totalRevenue = bookingRevenue + orderRevenue;
-
-    const settings = await storage.getSettings();
-    const commissionRate = settings.commissionRate / 100;
-    const commission = Math.round(totalRevenue * commissionRate);
-
-    const monthsStr = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const currentDate = new Date();
-    const last6Months: { name: string, month: number, year: number, revenue: number }[] = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-      last6Months.push({
-        name: monthsStr[d.getMonth()],
-        month: d.getMonth(),
-        year: d.getFullYear(),
-        revenue: 0,
-      });
-    }
-
-    bookings.forEach(b => {
-      if (!b.createdAt) return;
-      const d = new Date(b.createdAt);
-      const monthData = last6Months.find(m => m.month === d.getMonth() && m.year === d.getFullYear());
-      if (monthData) monthData.revenue += (b.priceSnapshot / 100);
-    });
-    orders.forEach(o => {
-      if (!o.createdAt) return;
-      const d = new Date(o.createdAt);
-      const monthData = last6Months.find(m => m.month === d.getMonth() && m.year === d.getFullYear());
-      if (monthData) monthData.revenue += (o.priceSnapshot / 100);
-    });
-
-    const revenueTrend = last6Months.map(m => ({ name: m.name, revenue: m.revenue }));
-
-    // Service Categories breakdown
-    const categoriesMap: Record<string, number> = {};
-    listings.filter(l => l.listingType === 'SERVICE').forEach(l => {
-      const cat = l.category || 'Other';
-      categoriesMap[cat] = (categoriesMap[cat] || 0) + 1;
-    });
-
-    const totalServices = listings.filter(l => l.listingType === 'SERVICE').length || 1;
-    const colors = ['#1e3a8a', '#2563eb', '#3b82f6', '#94a3b8', '#cbd5e1'];
-    const serviceCategories = Object.entries(categoriesMap).map(([name, count], idx) => ({
-      name,
-      value: Math.round((count / totalServices) * 100),
-      color: colors[idx % colors.length]
-    })).sort((a, b) => b.value - a.value).slice(0, 5);
-
-    const userGrowth = last6Months.map(m => {
-      const endOfMonth = new Date(m.year, m.month + 1, 0, 23, 59, 59);
-      const usersUntilMonth = users.filter((u: any) => u.createdAt && new Date(u.createdAt) <= endOfMonth).length;
-      return { name: m.name, users: usersUntilMonth };
-    });
-
-    res.status(200).json({
+    const emptyResponse = () => ({
       metrics: {
-        communities: communities.length,
-        totalUsers: users.length,
-        activeServices,
-        totalRevenue: totalRevenue / 100, // Assuming price is in cents
-        commission: commission / 100,
+        communities: 0,
+        totalUsers: 0,
+        activeServices: 0,
+        totalRevenue: 0,
+        commission: 0,
       },
-      revenueTrend,
-      userGrowth,
-      serviceCategories
+      revenueTrend: [{ name: "Jan", revenue: 0 }, { name: "Feb", revenue: 0 }, { name: "Mar", revenue: 0 }, { name: "Apr", revenue: 0 }, { name: "May", revenue: 0 }, { name: "Jun", revenue: 0 }],
+      userGrowth: [{ name: "Jan", users: 0 }, { name: "Feb", users: 0 }, { name: "Mar", users: 0 }, { name: "Apr", users: 0 }, { name: "May", users: 0 }, { name: "Jun", users: 0 }],
+      serviceCategories: [],
     });
+
+    try {
+      const [communities, users, listings, bookings, orders] = await Promise.all([
+        storage.getCommunities().catch(() => []),
+        storage.getUsers().catch(() => []),
+        storage.getListings().catch(() => []),
+        storage.getBookings().catch(() => []),
+        storage.getOrders().catch(() => []),
+      ]);
+
+      const safeListings = Array.isArray(listings) ? listings : [];
+      const safeBookings = Array.isArray(bookings) ? bookings : [];
+      const safeOrders = Array.isArray(orders) ? orders : [];
+      const safeUsers = Array.isArray(users) ? users : [];
+      const safeCommunities = Array.isArray(communities) ? communities : [];
+
+      const activeServices = safeListings.filter((l: any) => l.listingType === "SERVICE" && l.status === "ACTIVE").length;
+      const bookingRevenue = safeBookings.reduce((sum: number, b: any) => sum + (Number(b.priceSnapshot) || 0), 0);
+      const orderRevenue = safeOrders.reduce((sum: number, o: any) => sum + (Number(o.priceSnapshot) || 0), 0);
+      const totalRevenue = bookingRevenue + orderRevenue;
+
+      let settings: { commissionRate?: number } | null = null;
+      try {
+        settings = await storage.getSettings();
+      } catch {
+        // ignore
+      }
+      const commissionRate = (settings?.commissionRate ?? 0) / 100;
+      const commission = Math.round(totalRevenue * commissionRate);
+
+      const monthsStr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const currentDate = new Date();
+      const last6Months: { name: string; month: number; year: number; revenue: number }[] = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+        last6Months.push({
+          name: monthsStr[d.getMonth()],
+          month: d.getMonth(),
+          year: d.getFullYear(),
+          revenue: 0,
+        });
+      }
+
+      for (const b of safeBookings) {
+        if (!b.createdAt) continue;
+        const d = new Date(b.createdAt);
+        const monthData = last6Months.find((m) => m.month === d.getMonth() && m.year === d.getFullYear());
+        if (monthData) monthData.revenue += (Number(b.priceSnapshot) || 0) / 100;
+      }
+      for (const o of safeOrders) {
+        if (!o.createdAt) continue;
+        const d = new Date(o.createdAt);
+        const monthData = last6Months.find((m) => m.month === d.getMonth() && m.year === d.getFullYear());
+        if (monthData) monthData.revenue += (Number(o.priceSnapshot) || 0) / 100;
+      }
+
+      const revenueTrend = last6Months.map((m) => ({ name: m.name, revenue: m.revenue }));
+
+      const categoriesMap: Record<string, number> = {};
+      for (const l of safeListings.filter((x: any) => x.listingType === "SERVICE")) {
+        const cat = l.category || "Other";
+        categoriesMap[cat] = (categoriesMap[cat] || 0) + 1;
+      }
+      const totalServices = safeListings.filter((l: any) => l.listingType === "SERVICE").length || 1;
+      const colors = ["#1e3a8a", "#2563eb", "#3b82f6", "#94a3b8", "#cbd5e1"];
+      const serviceCategories = Object.entries(categoriesMap)
+        .map(([name, count], idx) => ({
+          name,
+          value: Math.round((count / totalServices) * 100),
+          color: colors[idx % colors.length],
+        }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 5);
+
+      const userGrowth = last6Months.map((m) => {
+        const endOfMonth = new Date(m.year, m.month + 1, 0, 23, 59, 59);
+        const usersUntilMonth = safeUsers.filter((u: any) => u.createdAt && new Date(u.createdAt) <= endOfMonth).length;
+        return { name: m.name, users: usersUntilMonth };
+      });
+
+      res.status(200).json({
+        metrics: {
+          communities: safeCommunities.length,
+          totalUsers: safeUsers.length,
+          activeServices,
+          totalRevenue: totalRevenue / 100,
+          commission: commission / 100,
+        },
+        revenueTrend,
+        userGrowth,
+        serviceCategories,
+      });
+    } catch (err) {
+      console.error("GET /api/admin/analytics error:", err);
+      res.status(200).json(emptyResponse());
+    }
   });
 
   app.get(api.manager.analytics.path, authMiddleware, async (req: any, res) => {

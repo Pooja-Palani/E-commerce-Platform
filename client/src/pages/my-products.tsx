@@ -24,6 +24,13 @@ export default function MyProducts() {
     const products = listings?.filter(l => l.listingType === "PRODUCT") || [];
     const getListingTitle = (listingId: string) =>
         products.find(p => p.id === listingId)?.title || "Product";
+    const getQuotedPriceForListing = (listingId: string) => {
+        const quotedOrders = sellerOrders.filter(
+            (o: any) => o.listingId === listingId && o.priceSnapshot > 0
+        );
+        if (quotedOrders.length === 0) return null;
+        return Math.min(...quotedOrders.map((o: any) => o.priceSnapshot));
+    };
     const updateOrderStatus = useUpdateOrderStatus();
 
     const ORDER_STATUS_OPTIONS = [
@@ -129,9 +136,16 @@ export default function MyProducts() {
                                     <div className="flex items-center justify-between pt-4 border-t border-border/40">
                                         <div className="flex flex-col">
                                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Price</span>
-                                            <span className="text-lg font-bold text-primary">₹{product.price}</span>
+                                            <span className="text-lg font-bold text-primary">
+                                                {product.price > 0
+                                                    ? `₹${product.price}`
+                                                    : (() => {
+                                                        const quoted = getQuotedPriceForListing(product.id);
+                                                        return quoted != null ? `₹${quoted} (quoted)` : "Price on request";
+                                                    })()}
+                                            </span>
                                         </div>
-                                        <Link href={`/listings/${product.id}`}>
+                                        <Link href={`/list-product/${product.id}`}>
                                             <Button variant="outline" size="sm" className="font-bold text-xs h-8">Edit Listing</Button>
                                         </Link>
                                     </div>

@@ -67,7 +67,7 @@ export function ImagePicker({ value, onChange, label = "Product Image", classNam
             <img
               src={value}
               alt="Preview"
-              className="h-32 w-32 rounded-xl object-cover border-2 border-border/50"
+              className="h-32 w-64 min-w-[14rem] rounded-xl object-cover border-2 border-border/50"
             />
             <Button
               type="button"
@@ -83,7 +83,7 @@ export function ImagePicker({ value, onChange, label = "Product Image", classNam
           <Button
             type="button"
             variant="outline"
-            className="h-32 w-32 rounded-xl border-2 border-dashed border-primary/30 hover:border-primary/50 hover:bg-primary/5 flex flex-col gap-2"
+            className="h-32 min-w-[14rem] w-64 rounded-xl border-2 border-dashed border-primary/30 hover:border-primary/50 hover:bg-primary/5 flex flex-col gap-2"
             onClick={() => inputRef.current?.click()}
             disabled={uploading}
           >

@@ -1,5 +1,6 @@
 import { useParams, useLocation } from "wouter";
 import { useAuthStore } from "@/store/use-auth";
+import { useCartStore } from "@/store/use-cart";
 import { useListing, useListings, useUpdateListingStock, useCreateProductInterest, useProductInterestCount } from "@/hooks/use-listings";
 import { useCreateOrder } from "@/hooks/use-orders";
 import { useCreateBooking, useListingSlots, useAvailableSlots, useReplaceListingSlots } from "@/hooks/use-bookings";
@@ -27,6 +28,7 @@ export default function ListingDetail() {
     const { data: allListings } = useListings();
     const createOrder = useCreateOrder();
     const createBooking = useCreateBooking();
+    const addToCart = useCartStore((s) => s.addItem);
     const { toast } = useToast();
 
     const [logisticsPreference, setLogisticsPreference] = useState<"PICKUP" | "DELIVERY_SUPPORT">("PICKUP");
@@ -46,7 +48,8 @@ export default function ListingDetail() {
 
     const listingId = displayListing?.id ?? id ?? "";
     const isService = displayListing?.listingType === "SERVICE";
-    const isSeller = displayListing?.sellerId === user?.id && viewMode === "SELLER";
+    const isOwner = displayListing?.sellerId === user?.id;
+    const isSeller = isOwner && viewMode === "SELLER";
 
     const { data: listingSlots, refetch: refetchSlots } = useListingSlots(listingId);
     const hasSlots = (listingSlots?.length ?? 0) > 0;
@@ -113,6 +116,42 @@ export default function ListingDetail() {
         await replaceSlots.mutateAsync(valid);
         refetchSlots();
         setManageSlotsOpen(false);
+    };
+
+    const handleAddServiceToCart = () => {
+        if (!displayListing || !bookingDate || (hasSlots && !selectedSlot)) return;
+        addToCart({
+            type: "service",
+            listingId: displayListing.id,
+            title: displayListing.title,
+            sellerId: displayListing.sellerId,
+            sellerName: displayListing.sellerNameSnapshot,
+            price: displayListing.price,
+            quantity: 1,
+            bookingDate: bookingDate || new Date().toISOString().split("T")[0],
+            slotStartTime: selectedSlot?.startTime,
+            slotEndTime: selectedSlot?.endTime,
+        });
+        toast({ title: "Added to cart", description: "Go to Cart to checkout." });
+        setLocation("/cart");
+    };
+
+    const handleAddProductToCart = () => {
+        if (!displayListing) return;
+        const price = displayListing.buyNowEnabled ? displayListing.price : 0;
+        addToCart({
+            type: "product",
+            listingId: displayListing.id,
+            title: displayListing.title,
+            sellerId: displayListing.sellerId,
+            sellerName: displayListing.sellerNameSnapshot,
+            price,
+            quantity: isStockProduct ? Math.min(quantity, currentStock) : 1,
+            logisticsPreference,
+            deliveryAddress: logisticsPreference === "DELIVERY_SUPPORT" ? deliveryAddress : undefined,
+        });
+        toast({ title: "Added to cart", description: "Go to Cart to checkout." });
+        setLocation("/cart");
     };
 
     return (
@@ -308,8 +347,8 @@ export default function ListingDetail() {
                                 )}
                             </Card>
                         )}
-                        {/* Service: Book Now */}
-                        {isService && (
+                        {/* Service: Book Now (only for buyers, not the owner) */}
+                        {isService && !isOwner && (
                             <Card className="rounded-[2.5rem] shadow-2xl shadow-primary/5 border-primary/10 overflow-hidden">
                                 <CardHeader className="bg-primary/5 pb-6">
                                     <CardTitle className="text-xl">Book Now</CardTitle>
@@ -362,29 +401,40 @@ export default function ListingDetail() {
                                             )}
                                         </div>
                                     )}
-                                    <Button
-                                        className="w-full h-14 rounded-2xl font-bold text-lg shadow-lg shadow-primary/20 gap-2"
-                                        onClick={handleBookService}
-                                        disabled={
-                                            createBooking.isPending ||
-                                            !bookingDate ||
-                                            (hasSlots && !selectedSlot)
-                                        }
-                                    >
-                                        <Calendar size={20} />
-                                        {createBooking.isPending ? "Booking..." : "Confirm Booking"}
-                                    </Button>
+                                    <div className="flex flex-col sm:flex-row gap-3">
+                                        <Button
+                                            className="flex-1 h-14 rounded-2xl font-bold text-lg shadow-lg shadow-primary/20 gap-2"
+                                            onClick={handleBookService}
+                                            disabled={
+                                                createBooking.isPending ||
+                                                !bookingDate ||
+                                                (hasSlots && !selectedSlot)
+                                            }
+                                        >
+                                            <Calendar size={20} />
+                                            {createBooking.isPending ? "Booking..." : "Confirm Booking"}
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            className="flex-1 h-14 rounded-2xl font-bold text-lg gap-2"
+                                            onClick={handleAddServiceToCart}
+                                            disabled={!bookingDate || (hasSlots && !selectedSlot)}
+                                        >
+                                            <ShoppingCart size={20} />
+                                            Add to Cart
+                                        </Button>
+                                    </div>
                                 </CardContent>
                             </Card>
                         )}
-                        {/* Product: Purchase Section */}
-                        {!isService && !displayListing.buyNowEnabled && (
+                        {/* Product: Request Quotation (only for buyers, not the owner) */}
+                        {!isService && !isOwner && !displayListing.buyNowEnabled && (
                             <Card className="rounded-[2.5rem] shadow-2xl shadow-primary/5 border-primary/10 overflow-hidden">
                                 <CardHeader className="bg-primary/5 pb-6">
                                     <CardTitle className="text-xl">Request Quotation</CardTitle>
                                     <CardDescription>Get a custom price quote from the seller. The order will be sent directly to them.</CardDescription>
                                 </CardHeader>
-                                <CardContent className="p-8">
+                                <CardContent className="p-8 space-y-3">
                                     <Button
                                         className="w-full h-14 rounded-2xl font-bold text-lg shadow-lg shadow-primary/20 gap-2"
                                         onClick={handlePurchase}
@@ -393,10 +443,19 @@ export default function ListingDetail() {
                                         <FileText size={20} />
                                         {createOrder.isPending ? "Sending..." : "Request Quotation"}
                                     </Button>
+                                    <Button
+                                        variant="outline"
+                                        className="w-full h-12 rounded-2xl font-bold gap-2"
+                                        onClick={handleAddProductToCart}
+                                    >
+                                        <ShoppingCart size={18} />
+                                        Add to Cart
+                                    </Button>
                                 </CardContent>
                             </Card>
                         )}
-                        {!isService && displayListing.buyNowEnabled && (
+                        {/* Product: Buy Now (only for buyers, not the owner) */}
+                        {!isService && !isOwner && displayListing.buyNowEnabled && (
                             <Card className="rounded-[2.5rem] shadow-2xl shadow-primary/5 border-primary/10 overflow-hidden">
                                 <CardHeader className="bg-primary/5 pb-6">
                                     <CardTitle className="text-xl">Buy Now</CardTitle>
@@ -478,14 +537,25 @@ export default function ListingDetail() {
                                         </div>
                                     )}
 
-                                    <Button
-                                        className="w-full h-14 rounded-2xl font-bold text-lg shadow-lg shadow-primary/20 gap-2"
-                                        onClick={handlePurchase}
-                                        disabled={createOrder.isPending || (logisticsPreference === 'DELIVERY_SUPPORT' && !deliveryAddress)}
-                                    >
-                                        <ShoppingCart size={20} />
-                                        {createOrder.isPending ? "Processing..." : "Confirm & Pay Now"}
-                                    </Button>
+                                    <div className="flex flex-col gap-3">
+                                        <Button
+                                            className="w-full h-14 rounded-2xl font-bold text-lg shadow-lg shadow-primary/20 gap-2"
+                                            onClick={handlePurchase}
+                                            disabled={createOrder.isPending || (logisticsPreference === 'DELIVERY_SUPPORT' && !deliveryAddress)}
+                                        >
+                                            <ShoppingCart size={20} />
+                                            {createOrder.isPending ? "Processing..." : "Confirm & Pay Now"}
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            className="w-full h-12 rounded-2xl font-bold gap-2"
+                                            onClick={handleAddProductToCart}
+                                            disabled={logisticsPreference === 'DELIVERY_SUPPORT' && !deliveryAddress}
+                                        >
+                                            <ShoppingCart size={18} />
+                                            Add to Cart
+                                        </Button>
+                                    </div>
                                         </>
                                     )}
                                 </CardContent>
