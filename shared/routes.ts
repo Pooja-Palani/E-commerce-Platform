@@ -121,7 +121,25 @@ export const api = {
         method: 'GET' as const,
         path: '/api/communities/:id/posts' as const,
         responses: {
-          200: z.array(z.custom<typeof posts.$inferSelect>()),
+          200: z.array(z.object({
+            id: z.string(),
+            communityId: z.string(),
+            authorId: z.string(),
+            title: z.string(),
+            content: z.string(),
+            listingId: z.string().nullable(),
+            createdAt: z.string(),
+            author: z.object({ fullName: z.string(), email: z.string().nullable(), phone: z.string().nullable() }),
+            listing: z.object({
+              id: z.string(),
+              title: z.string(),
+              description: z.string(),
+              listingType: z.string(),
+              price: z.number(),
+              buyNowEnabled: z.boolean(),
+              imageUrl: z.string().nullable(),
+            }).passthrough().nullable(),
+          })),
         }
       },
       create: {
@@ -130,6 +148,7 @@ export const api = {
         input: z.object({
           title: z.string().min(1),
           content: z.string().min(1),
+          listingId: z.string().optional(),
         }),
         responses: {
           201: z.custom<typeof posts.$inferSelect>(),
@@ -174,6 +193,15 @@ export const api = {
       path: '/api/users' as const,
       responses: {
         200: z.array(z.custom<typeof users.$inferSelect>()),
+      }
+    },
+    profile: {
+      method: 'GET' as const,
+      path: '/api/users/:id/profile' as const,
+      responses: {
+        200: z.object({ fullName: z.string(), email: z.string().nullable(), phone: z.string().nullable() }),
+        403: errorSchemas.forbidden,
+        404: errorSchemas.notFound,
       }
     },
     update: {
@@ -255,10 +283,44 @@ export const api = {
       input: z.object({
         listingId: z.string(),
         bookingDate: z.string().or(z.date()),
+        slotStartTime: z.string().optional(),
+        slotEndTime: z.string().optional(),
       }),
       responses: {
         201: z.custom<typeof bookings.$inferSelect>(),
         400: errorSchemas.validation,
+      },
+    },
+  },
+  listingSlots: {
+    list: {
+      method: "GET" as const,
+      path: "/api/listings/:id/slots" as const,
+      responses: {
+        200: z.array(z.object({ id: z.string(), listingId: z.string(), startTime: z.string(), endTime: z.string() })),
+      },
+    },
+    available: {
+      method: "GET" as const,
+      path: "/api/listings/:id/available-slots" as const,
+      responses: {
+        200: z.array(z.object({ id: z.string(), startTime: z.string(), endTime: z.string() })),
+      },
+    },
+    create: {
+      method: "POST" as const,
+      path: "/api/listings/:id/slots" as const,
+      input: z.object({ startTime: z.string(), endTime: z.string() }),
+      responses: {
+        201: z.object({ id: z.string(), listingId: z.string(), startTime: z.string(), endTime: z.string() }),
+      },
+    },
+    replace: {
+      method: "PUT" as const,
+      path: "/api/listings/:id/slots" as const,
+      input: z.object({ slots: z.array(z.object({ startTime: z.string(), endTime: z.string() })) }),
+      responses: {
+        200: z.array(z.object({ id: z.string(), listingId: z.string(), startTime: z.string(), endTime: z.string() })),
       },
     },
   },
@@ -275,6 +337,7 @@ export const api = {
       path: "/api/orders" as const,
       input: z.object({
         listingId: z.string(),
+        quantity: z.number().int().min(1).optional(),
         logisticsPreference: z.enum(["PICKUP", "DELIVERY_SUPPORT"]).optional(),
         deliveryAddress: z.string().optional(),
       }),

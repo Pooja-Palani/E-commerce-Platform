@@ -14,7 +14,7 @@ export const listingStatusEnum = pgEnum("listing_status", ["ACTIVE", "INACTIVE",
 export const listingTypeEnum = pgEnum("listing_type", ["SERVICE", "PRODUCT"]);
 
 export const bookingStatusEnum = pgEnum("booking_status", ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED"]);
-export const orderStatusEnum = pgEnum("order_status", ["PENDING", "CONFIRMED", "SHIPPED", "DELIVERED", "CANCELLED"]);
+export const orderStatusEnum = pgEnum("order_status", ["PENDING", "QUOTATION_PROVIDED", "CONFIRMED", "SHIPPED", "DELIVERED", "CANCELLED"]);
 export const availabilityBasisEnum = pgEnum("availability_basis", ["FOREVER", "TIMELINE", "STOCK"]);
 export const paymentPreferenceEnum = pgEnum("payment_preference", ["IN_APP", "DIRECT"]);
 export const logisticsPreferenceEnum = pgEnum("logistics_preference", ["PICKUP", "DELIVERY_SUPPORT"]);
@@ -70,10 +70,22 @@ export const userCommunities = pgTable("user_communities", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const communityInviteStatusEnum = pgEnum("community_invite_status", ["PENDING", "ACCEPTED", "REJECTED"]);
+export const communityInvites = pgTable("community_invites", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  communityId: varchar("community_id").notNull(),
+  inviteeEmail: text("invitee_email").notNull(),
+  inviteeId: varchar("invitee_id"),
+  invitedById: varchar("invited_by_id").notNull(),
+  status: communityInviteStatusEnum("status").notNull().default("PENDING"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const listings = pgTable("listings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
   description: text("description").notNull(),
+  imageUrl: text("image_url"),
   price: integer("price").notNull(), // stored in cents
   listingType: listingTypeEnum("listing_type").notNull().default("SERVICE"),
   category: text("category"),
@@ -99,12 +111,22 @@ export const listings = pgTable("listings", {
   version: integer("version").default(1).notNull(),
 });
 
+export const listingSlots = pgTable("listing_slots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  listingId: varchar("listing_id").notNull(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const bookings = pgTable("bookings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   listingId: varchar("listing_id").notNull(),
   userId: varchar("user_id").notNull(),
   sellerId: varchar("seller_id").notNull(),
   bookingDate: timestamp("booking_date").notNull(),
+  slotStartTime: text("slot_start_time"),
+  slotEndTime: text("slot_end_time"),
   status: bookingStatusEnum("status").notNull().default("PENDING"),
   priceSnapshot: integer("price_snapshot").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -116,12 +138,20 @@ export const orders = pgTable("orders", {
   listingId: varchar("listing_id").notNull(),
   userId: varchar("user_id").notNull(),
   sellerId: varchar("seller_id").notNull(),
+  quantity: integer("quantity").notNull().default(1),
   status: orderStatusEnum("status").notNull().default("PENDING"),
   priceSnapshot: integer("price_snapshot").notNull(),
   logisticsPreference: logisticsPreferenceEnum("logistics_preference").notNull().default("PICKUP"),
   deliveryAddress: text("delivery_address"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   version: integer("version").default(1).notNull(),
+});
+
+export const productInterests = pgTable("product_interests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  listingId: varchar("listing_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const auditLogs = pgTable("audit_logs", {
@@ -139,6 +169,7 @@ export const posts = pgTable("posts", {
   authorId: varchar("author_id").notNull(),
   title: text("title").notNull(),
   content: text("content").notNull(),
+  listingId: varchar("listing_id"), // optional shared product/service
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -198,10 +229,17 @@ export const insertUserCommunitySchema = createInsertSchema(userCommunities).omi
 export type UserCommunity = typeof userCommunities.$inferSelect;
 export type InsertUserCommunity = z.infer<typeof insertUserCommunitySchema>;
 
+export const insertCommunityInviteSchema = createInsertSchema(communityInvites).omit({ id: true, createdAt: true });
+export type CommunityInvite = typeof communityInvites.$inferSelect;
+export type InsertCommunityInvite = z.infer<typeof insertCommunityInviteSchema>;
+
 export type Listing = typeof listings.$inferSelect;
 export type InsertListing = typeof listings.$inferInsert;
 
 export type AuditLog = typeof auditLogs.$inferSelect;
+
+export type ListingSlot = typeof listingSlots.$inferSelect;
+export type InsertListingSlot = typeof listingSlots.$inferInsert;
 
 export type Booking = typeof bookings.$inferSelect;
 export type InsertBooking = typeof bookings.$inferInsert;
@@ -231,6 +269,7 @@ export const registerSchema = insertUserSchema.extend({
   locality: z.string().min(1, "Locality is required"),
   postalCode: z.string().min(1, "Postal code is required"),
   address: z.string().min(1, "Address is required"),
+  inviteCommunityId: z.string().optional(),
 });
 export type RegisterRequest = z.infer<typeof registerSchema>;
 

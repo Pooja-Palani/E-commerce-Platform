@@ -1,6 +1,7 @@
 import { Layout } from "@/components/layout";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@shared/routes";
+import { useListings } from "@/hooks/use-listings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow
@@ -17,6 +18,18 @@ export default function MyActivity() {
     const { data: orders, isLoading: loadingOrders } = useQuery<any[]>({
         queryKey: [api.orders.list.path],
     });
+
+    const { data: listings } = useListings();
+    const listingsMap = new Map(listings?.map((l: any) => [l.id, l]) ?? []);
+
+    const getServiceTitle = (booking: any) =>
+        booking.listingTitle ?? listingsMap.get(booking.listingId)?.title ?? "Service";
+    const getProductTitle = (order: any) =>
+        order.listingTitle ?? listingsMap.get(order.listingId)?.title ?? "Product";
+    const getSellerName = (order: any) =>
+        order.sellerName ?? listingsMap.get(order.listingId)?.sellerNameSnapshot ?? "Seller";
+    const getProviderName = (booking: any) =>
+        booking.sellerName ?? listingsMap.get(booking.listingId)?.sellerNameSnapshot ?? "Provider";
 
     const isLoading = loadingBookings || loadingOrders;
 
@@ -48,7 +61,7 @@ export default function MyActivity() {
                                         <TableRow className="hover:bg-transparent">
                                             <TableHead className="font-bold text-xs uppercase tracking-wider pl-6">Service</TableHead>
                                             <TableHead className="font-bold text-xs uppercase tracking-wider">Provider</TableHead>
-                                            <TableHead className="font-bold text-xs uppercase tracking-wider">Date & Time</TableHead>
+                                            <TableHead className="font-bold text-xs uppercase tracking-wider">Date</TableHead>
                                             <TableHead className="font-bold text-xs uppercase tracking-wider">Price</TableHead>
                                             <TableHead className="font-bold text-xs uppercase tracking-wider text-right pr-6">Status</TableHead>
                                         </TableRow>
@@ -56,10 +69,15 @@ export default function MyActivity() {
                                     <TableBody>
                                         {bookings.map((booking) => (
                                             <TableRow key={booking.id} className="hover:bg-muted/5 transition-colors">
-                                                <TableCell className="font-medium pl-6">{booking.listingTitle || "Service Listing"}</TableCell>
-                                                <TableCell className="text-muted-foreground">Provider Info</TableCell>
+                                                <TableCell className="font-medium pl-6">{getServiceTitle(booking)}</TableCell>
+                                                <TableCell className="text-muted-foreground">{getProviderName(booking)}</TableCell>
                                                 <TableCell>
-                                                    {format(new Date(booking.bookingDate), "MMM d, yyyy 'at' h:mm a")}
+                                                    {format(new Date(booking.bookingDate), "MMM d, yyyy")}
+                                                    {booking.slotStartTime && booking.slotEndTime && (
+                                                        <span className="text-muted-foreground ml-1">
+                                                            ({booking.slotStartTime}–{booking.slotEndTime})
+                                                        </span>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell className="font-bold">₹{booking.priceSnapshot}</TableCell>
                                                 <TableCell className="text-right pr-6">
@@ -118,15 +136,27 @@ export default function MyActivity() {
                                     <TableBody>
                                         {orders.map((order) => (
                                             <TableRow key={order.id} className="hover:bg-muted/5 transition-colors">
-                                                <TableCell className="font-medium pl-6">{order.listingTitle || "Product Listing"}</TableCell>
-                                                <TableCell className="text-muted-foreground">Seller Info</TableCell>
+                                                <TableCell className="font-medium pl-6">
+                                                    {getProductTitle(order)}
+                                                    {order.quantity > 1 && <span className="text-muted-foreground font-normal ml-1">(×{order.quantity})</span>}
+                                                </TableCell>
+                                                <TableCell className="text-muted-foreground">{getSellerName(order)}</TableCell>
                                                 <TableCell>
                                                     {format(new Date(order.createdAt), "MMM d, yyyy")}
                                                 </TableCell>
-                                                <TableCell className="font-bold">₹{order.priceSnapshot}</TableCell>
+                                                <TableCell className="font-bold">
+                                                    {order.priceSnapshot === 0 ? "Quotation requested" : `₹${order.priceSnapshot}`}
+                                                </TableCell>
                                                 <TableCell className="text-right pr-6">
-                                                    <Badge variant="secondary" className="capitalize px-3 py-0.5 text-[10px] font-bold">
-                                                        {order.status.toLowerCase()}
+                                                    <Badge
+                                                        variant="secondary"
+                                                        className={`capitalize px-3 py-0.5 text-[10px] font-bold ${
+                                                            order.status === "DELIVERED" || order.status === "CONFIRMED" ? "bg-green-500/10 text-green-600 border-green-500/20" :
+                                                            order.status === "PENDING" || order.status === "QUOTATION_PROVIDED" ? "bg-amber-500/10 text-amber-600 border-amber-500/20" :
+                                                            "bg-muted text-muted-foreground"
+                                                        }`}
+                                                    >
+                                                        {order.status.toLowerCase().replace(/_/g, " ")}
                                                     </Badge>
                                                 </TableCell>
                                             </TableRow>

@@ -48,7 +48,7 @@ export default function ManagerServices() {
 
                                             <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-auto">
                                                 <div className="font-bold text-indigo-600 border border-indigo-100 bg-indigo-50/50 px-2.5 py-1 rounded-md">
-                                                    ₹{(service.price / 100).toLocaleString()} <span className="text-slate-500 text-xs font-medium">/hr</span>
+                                                    {service.buyNowEnabled ? <>₹{service.price} <span className="text-slate-500 text-xs font-medium">/hr</span></> : "Given for quotation"}
                                                 </div>
                                                 <div className="flex gap-2">
                                                     <Eye className="w-4 h-4 text-slate-400" />

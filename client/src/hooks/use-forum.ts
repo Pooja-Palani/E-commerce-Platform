@@ -51,17 +51,33 @@ export function useComments(postId: string) {
     });
 }
 
-export function useCreatePost(communityId: string) {
+type PostWithAuthor = {
+    id: string;
+    communityId: string;
+    authorId: string;
+    title: string;
+    content: string;
+    listingId: string | null;
+    createdAt: string;
+    author: { fullName: string; email: string | null; phone: string | null };
+    listing: { id: string; title: string; description: string; listingType: string; price: number; buyNowEnabled: boolean; imageUrl: string | null } | null;
+};
+
+export function useCreatePost(
+    communityId: string,
+    currentUser: { id: string; fullName: string; email: string | null; phone: string | null }
+) {
     const queryClient = useQueryClient();
     const { toast } = useToast();
 
     return useMutation({
-        mutationFn: async (data: { title: string; content: string }) => {
+        mutationFn: async (data: { title: string; content: string; listingId?: string; _listing?: PostWithAuthor["listing"] }) => {
+            const { _listing, ...payload } = data;
             const url = buildUrl(api.communities.posts.create.path, { id: communityId });
             const res = await fetch(url, {
                 method: api.communities.posts.create.method,
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                body: JSON.stringify(payload),
                 credentials: "include",
             });
       if (!res.ok) {
@@ -70,9 +86,32 @@ export function useCreatePost(communityId: string) {
       }
             return api.communities.posts.create.responses[201].parse(await res.json());
         },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: [api.communities.posts.list.path, { communityId }] });
-            toast({ title: "Post published" });
+        onSuccess: (newPost, variables) => {
+            const queryKey = [api.communities.posts.list.path, { communityId }];
+            const createdAt = typeof newPost.createdAt === "string"
+                ? newPost.createdAt
+                : (newPost.createdAt as Date)?.toISOString?.() ?? new Date().toISOString();
+            const optimisticPost: PostWithAuthor = {
+                id: newPost.id,
+                communityId: newPost.communityId,
+                authorId: newPost.authorId,
+                title: newPost.title,
+                content: newPost.content,
+                listingId: newPost.listingId ?? null,
+                createdAt,
+                author: {
+                    fullName: currentUser.fullName,
+                    email: currentUser.email,
+                    phone: currentUser.phone,
+                },
+                listing: variables._listing ?? null,
+            };
+            queryClient.setQueryData(queryKey, (prev: PostWithAuthor[] | undefined) => [
+                ...(prev || []),
+                optimisticPost,
+            ]);
+            queryClient.invalidateQueries({ queryKey });
+            toast({ title: "Message sent" });
         },
     });
 }

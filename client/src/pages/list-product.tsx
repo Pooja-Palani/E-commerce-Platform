@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { useAuthStore } from "@/store/use-auth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,14 +17,24 @@ import { api } from "@shared/routes";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { useUserCommunities } from "@/hooks/use-communities";
+import { useUpdateUser } from "@/hooks/use-users";
+import { Loader2, ArrowLeft, FileText } from "lucide-react";
+import { ImagePicker } from "@/components/image-picker";
 import { z } from "zod";
+import { Switch } from "@/components/ui/switch";
 
 export default function ListProduct() {
     const user = useAuthStore(s => s.user);
     const [, setLocation] = useLocation();
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const { data: userCommunities } = useUserCommunities(user?.id ?? "");
+    const updateUser = useUpdateUser();
+
+    const communities = (userCommunities ?? [])
+        .filter((m: { joinStatus: string }) => m.joinStatus === "ACTIVE")
+        .map((m: { community: { id: string; name: string } }) => m.community);
 
     const form = useForm({
         resolver: zodResolver(insertListingSchema.extend({
@@ -33,6 +44,12 @@ export default function ListProduct() {
             startDate: z.any().optional(),
             endDate: z.any().optional(),
             stockQuantity: z.number().min(0).optional().nullable(),
+            buyNowEnabled: z.boolean().optional(),
+            customCategory: z.string().optional(),
+            imageUrl: z.string().nullable().optional(),
+        }).refine((data) => data.category !== "Other" || (data.customCategory && data.customCategory.trim().length > 0), {
+            message: "Please specify the category",
+            path: ["customCategory"],
         })),
         defaultValues: {
             title: "",
@@ -40,12 +57,26 @@ export default function ListProduct() {
             price: 0,
             listingType: "PRODUCT",
             communityId: user?.communityId || "",
+            sellerId: user?.id ?? "",
             availabilityBasis: "FOREVER",
             startDate: "",
             endDate: "",
-            stockQuantity: null as number | null
+            stockQuantity: null as number | null,
+            buyNowEnabled: true,
+            customCategory: "",
+            imageUrl: null as string | null,
         }
     });
+
+    useEffect(() => {
+        const current = form.getValues("communityId");
+        if (user?.communityId && !current) {
+            form.setValue("communityId", user.communityId);
+        } else if (!current && communities.length === 1) {
+            form.setValue("communityId", communities[0].id);
+        }
+        if (user?.id) form.setValue("sellerId" as any, user.id);
+    }, [user?.communityId, user?.id, communities, form]);
 
     const mutation = useMutation({
         mutationFn: async (data: any) => {
@@ -53,18 +84,58 @@ export default function ListProduct() {
                 method: api.listings.create.method,
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(data),
+                credentials: "include",
             });
-            if (!res.ok) throw new Error("Failed to create listing");
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err?.message || "Failed to create listing");
+            }
             return res.json();
         },
         onSuccess: () => {
-            toast({ title: "Product listed", description: "Your product is now listed in the community market." });
+            toast({ title: "Product posted", description: "Your product has been posted successfully." });
             queryClient.invalidateQueries({ queryKey: ["/api/my-listings"] });
             setLocation("/my-products");
-        }
+        },
+        onError: (err: Error) => {
+            toast({ title: "Could not post product", description: err.message, variant: "destructive" });
+        },
     });
 
     if (!user) return null;
+
+    if (!user.isSeller) {
+        return (
+            <Layout>
+                <div className="max-w-3xl mx-auto pb-20">
+                    <div className="mb-4">
+                        <Link href="/my-products" className="flex items-center gap-2 text-sm text-primary hover:underline group w-fit">
+                            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+                            Back to my products
+                        </Link>
+                    </div>
+                    <Card className="border-amber-200 bg-amber-50/50">
+                        <CardContent className="p-8">
+                            <h3 className="text-lg font-bold text-amber-800 mb-2">Enable seller mode</h3>
+                            <p className="text-sm text-amber-700 mb-6">
+                                You need to enable seller mode to list products. Use the View Mode toggle in the sidebar (switch to Seller), or click below.
+                            </p>
+                            <Button
+                                onClick={() => updateUser.mutate(
+                                    { id: user.id, data: { isSeller: true, version: user.version } },
+                                    { onSuccess: (updated) => useAuthStore.getState().setUser(updated) }
+                                )}
+                                disabled={updateUser.isPending}
+                            >
+                                {updateUser.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                                Enable seller mode
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </div>
+            </Layout>
+        );
+    }
 
     return (
         <Layout>
@@ -82,8 +153,37 @@ export default function ListProduct() {
 
                 <Card className="border-border/50 shadow-sm bg-white">
                     <CardContent className="p-8">
-                        <form onSubmit={form.handleSubmit(data => mutation.mutate(data))} className="space-y-6">
+                        <form onSubmit={form.handleSubmit(
+                            (data) => {
+                                const payload = { ...data, sellerId: user!.id };
+                                if (!payload.buyNowEnabled) {
+                                    payload.price = 0;
+                                }
+                                if (payload.category === "Other" && payload.customCategory) {
+                                    payload.category = (payload as any).customCategory.trim();
+                                }
+                                delete (payload as any).customCategory;
+                                if (!(payload as any).imageUrl) delete (payload as any).imageUrl;
+                                mutation.mutate(payload);
+                            },
+                            (errors) => {
+                                const entries = Object.entries(errors);
+                                const [firstKey, firstError] = entries[0] ?? [];
+                                const fieldLabel = typeof firstKey === "string" ? firstKey : "Some fields";
+                                const message = (firstError as any)?.message ?? "Some required fields are missing.";
+                                toast({
+                                    title: "Please fix the form",
+                                    description: `${fieldLabel}: ${message}`,
+                                    variant: "destructive",
+                                });
+                            }
+                        )} className="space-y-6">
                             <div className="space-y-4">
+                                <ImagePicker
+                                    value={form.watch("imageUrl" as any)}
+                                    onChange={(url) => form.setValue("imageUrl" as any, url)}
+                                    label="Product Image"
+                                />
                                 <div className="grid gap-2">
                                     <Label htmlFor="title" className="font-bold">Product Name</Label>
                                     <Input
@@ -95,9 +195,37 @@ export default function ListProduct() {
                                     {form.formState.errors.title && <p className="text-xs text-destructive font-medium">{form.formState.errors.title.message}</p>}
                                 </div>
 
+                                {communities.length > 0 && (
+                                    <div className="grid gap-2">
+                                        <Label className="font-bold">Community</Label>
+                                        <Select
+                                            value={form.watch("communityId") || undefined}
+                                            onValueChange={(v) => form.setValue("communityId", v)}
+                                        >
+                                            <SelectTrigger className="h-11">
+                                                <SelectValue placeholder="Select community" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {communities.map((c: { id: string; name: string }) => (
+                                                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {form.formState.errors.communityId && (
+                                            <p className="text-xs text-destructive font-medium">{form.formState.errors.communityId.message}</p>
+                                        )}
+                                    </div>
+                                )}
+
                                 <div className="grid gap-2">
                                     <Label className="font-bold">Category</Label>
-                                    <Select onValueChange={(v) => form.setValue("category" as any, v)}>
+                                    <Select
+                                        value={(form.watch("category" as any) as string) || undefined}
+                                        onValueChange={(v) => {
+                                            form.setValue("category" as any, v);
+                                            if (v !== "Other") form.setValue("customCategory", "");
+                                        }}
+                                    >
                                         <SelectTrigger className="h-11">
                                             <SelectValue placeholder="Select category" />
                                         </SelectTrigger>
@@ -106,12 +234,40 @@ export default function ListProduct() {
                                             <SelectItem value="Electronics">Electronics</SelectItem>
                                             <SelectItem value="Furniture">Furniture</SelectItem>
                                             <SelectItem value="Books">Books</SelectItem>
-                                            <SelectItem value="Others">Others</SelectItem>
+                                            <SelectItem value="Other">Other</SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    {form.watch("category" as any) === "Other" && (
+                                        <div className="grid gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <Label htmlFor="customCategory" className="font-bold text-sm">Specify category</Label>
+                                            <Input
+                                                id="customCategory"
+                                                placeholder="e.g. Sports Equipment, Art Supplies"
+                                                {...form.register("customCategory")}
+                                                className="h-11"
+                                            />
+                                            {form.formState.errors.customCategory && (
+                                                <p className="text-xs text-destructive font-medium">{form.formState.errors.customCategory.message}</p>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="flex items-center justify-between rounded-xl border border-border/50 p-4 bg-muted/5">
+                                    <div className="flex items-center gap-3">
+                                        <FileText className="w-5 h-5 text-primary" />
+                                        <div>
+                                            <Label className="font-bold text-base">Request Quotation</Label>
+                                            <p className="text-xs text-muted-foreground">Buyers will request a quote instead of buying at fixed price</p>
+                                        </div>
+                                    </div>
+                                    <Switch
+                                        checked={!form.watch("buyNowEnabled")}
+                                        onCheckedChange={(checked) => form.setValue("buyNowEnabled", !checked)}
+                                    />
+                                </div>
+
+                                {form.watch("buyNowEnabled") && (
                                     <div className="grid gap-2">
                                         <Label htmlFor="price" className="font-bold">Price (₹)</Label>
                                         <Input
@@ -121,26 +277,12 @@ export default function ListProduct() {
                                             className="h-11"
                                         />
                                     </div>
-                                    <div className="grid gap-2">
-                                        <Label className="font-bold">Condition</Label>
-                                        <Select onValueChange={(v) => form.setValue("condition" as any, v)}>
-                                            <SelectTrigger className="h-11">
-                                                <SelectValue placeholder="Select condition" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Brand New">Brand New</SelectItem>
-                                                <SelectItem value="Like New">Like New</SelectItem>
-                                                <SelectItem value="Gently Used">Gently Used</SelectItem>
-                                                <SelectItem value="Used">Used</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
+                                )}
 
                                 <div className="grid gap-2">
                                     <Label className="font-bold text-sm">Availability Basis</Label>
                                     <Select
-                                        defaultValue="FOREVER"
+                                        value={form.watch("availabilityBasis" as any) ?? "FOREVER"}
                                         onValueChange={(v) => form.setValue("availabilityBasis" as any, v)}
                                     >
                                         <SelectTrigger className="h-11 border-primary/20 focus:ring-primary/20">
@@ -198,6 +340,9 @@ export default function ListProduct() {
                                         {...form.register("description")}
                                         className="min-h-[120px] resize-none"
                                     />
+                                    {form.formState.errors.description && (
+                                        <p className="text-xs text-destructive font-medium">{form.formState.errors.description.message}</p>
+                                    )}
                                 </div>
                             </div>
 

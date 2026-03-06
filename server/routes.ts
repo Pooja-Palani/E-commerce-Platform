@@ -1,5 +1,7 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import type { Server } from "http";
+import path from "path";
+import fs from "fs";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
@@ -8,13 +10,19 @@ import jwt from "jsonwebtoken";
 import { db } from "./db";
 import { users, userCommunities, communities } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import { upload } from "./upload";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-for-dev-only";
+
+const uploadsDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  app.use("/uploads", express.static(uploadsDir));
 
   app.post(api.auth.register.path, async (req, res) => {
     try {
@@ -40,6 +48,8 @@ export async function registerRoutes(
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(input.password, salt);
 
+      const inviteCommunityId = (input as any).inviteCommunityId;
+      const community = inviteCommunityId ? await storage.getCommunity(inviteCommunityId) : null;
       const user = await storage.createUser({
         fullName: input.fullName,
         email: input.email,
@@ -48,7 +58,7 @@ export async function registerRoutes(
         role: "RESIDENT", // Enforce RESIDENT role by default for all new accounts
         status: "ACTIVE",
         isSeller: input.isSeller || false,
-        communityId: input.communityId,
+        communityId: inviteCommunityId && community ? inviteCommunityId : input.communityId,
         sellerDisplayName: input.sellerDisplayName,
         sellerDescription: input.sellerDescription,
         locality: input.locality,
@@ -57,6 +67,9 @@ export async function registerRoutes(
         address: input.address,
         bio: input.bio,
       });
+      if (inviteCommunityId && community) {
+        await storage.createUserCommunity({ userId: user.id, communityId: inviteCommunityId, status: "ACTIVE" });
+      }
 
       await storage.createAuditLog({
         actorId: user.id,
@@ -244,15 +257,20 @@ export async function registerRoutes(
       const community = await storage.getCommunity(communityId);
       if (!community) return res.status(404).json({ message: "Community not found" });
 
+      // Public communities: auto-approve. Private: require manager approval.
+      const isPublic = community.visibility === "PUBLIC";
+      const membershipStatus = isPublic ? "ACTIVE" : "PENDING";
+      const userStatus = isPublic ? "ACTIVE" : "PENDING";
+
       // Check if user already requested or joined this community
       const existing = await storage.getUserCommunity(user.id, communityId);
       if (!existing) {
-        await storage.createUserCommunity({ userId: user.id, communityId, status: "PENDING" });
+        await storage.createUserCommunity({ userId: user.id, communityId, status: membershipStatus });
       }
 
-      // If user has no context, optionally set this as their primary pending context
+      // If user has no context, set this as their primary community
       if (!user.communityId) {
-        await storage.updateUser(user.id, { communityId, status: "PENDING", version: user.version });
+        await storage.updateUser(user.id, { communityId, status: userStatus, version: user.version });
       }
 
       const updatedUser = await storage.getUser(user.id);
@@ -287,12 +305,15 @@ export async function registerRoutes(
 
   app.get("/api/communities/:id/members", authMiddleware, async (req: any, res) => {
     try {
-      if (req.user.role !== "ADMIN") return res.status(403).json({ message: "Forbidden" });
+      const user = req.user;
       const communityId = req.params.id;
       const community = await storage.getCommunity(communityId);
       if (!community) return res.status(404).json({ message: "Community not found" });
-      const members = await storage.getCommunityMembers(communityId);
-      res.status(200).json(members);
+      if (user.role === "ADMIN" || (user.role === "COMMUNITY_MANAGER" && user.communityId === communityId)) {
+        const members = await storage.getCommunityMembers(communityId);
+        return res.status(200).json(members);
+      }
+      return res.status(403).json({ message: "Forbidden" });
     } catch (err) {
       res.status(500).json({ message: "Error fetching members" });
     }
@@ -300,14 +321,19 @@ export async function registerRoutes(
 
   app.post("/api/communities/:id/members/remove", authMiddleware, async (req: any, res) => {
     try {
-      if (req.user.role !== "ADMIN") return res.status(403).json({ message: "Forbidden" });
+      const currentUser = req.user;
       const communityId = req.params.id;
+      const canManage = currentUser.role === "ADMIN" || (currentUser.role === "COMMUNITY_MANAGER" && currentUser.communityId === communityId);
+      if (!canManage) return res.status(403).json({ message: "Forbidden" });
       const { userId } = req.body as { userId: string };
       if (!userId) return res.status(400).json({ message: "userId is required" });
-      const user = await storage.getUser(userId);
-      if (!user) return res.status(404).json({ message: "User not found" });
-      if (user.communityId === communityId) {
-        await storage.updateUser(userId, { communityId: null, version: user.version });
+      const targetUser = await storage.getUser(userId);
+      if (!targetUser) return res.status(404).json({ message: "User not found" });
+      if (targetUser.role === "COMMUNITY_MANAGER" && targetUser.communityId === communityId) {
+        return res.status(400).json({ message: "Cannot remove a community manager" });
+      }
+      if (targetUser.communityId === communityId) {
+        await storage.updateUser(userId, { communityId: null, version: targetUser.version });
       }
       const uc = await storage.getUserCommunity(userId, communityId);
       if (uc) await storage.updateUserCommunity(uc.id, "REMOVED");
@@ -323,8 +349,10 @@ export async function registerRoutes(
       res.status(status).json(data);
     };
     try {
-      if (req.user.role !== "ADMIN") return sendJson(403, { message: "Forbidden" });
+      const currentUser = req.user;
       const communityId = req.params.id;
+      const canManage = currentUser.role === "ADMIN" || (currentUser.role === "COMMUNITY_MANAGER" && currentUser.communityId === communityId);
+      if (!canManage) return sendJson(403, { message: "Forbidden" });
       const userId = req.body?.userId != null ? String(req.body.userId) : null;
       if (!userId) return sendJson(400, { message: "userId is required" });
       const community = await storage.getCommunity(communityId);
@@ -349,19 +377,120 @@ export async function registerRoutes(
     }
   });
 
+  // Community invite: for existing users - sends invite they can accept in-app
+  app.post("/api/communities/:id/invite", authMiddleware, async (req: any, res) => {
+    try {
+      const currentUser = req.user;
+      const communityId = req.params.id;
+      const canManage = currentUser.role === "ADMIN" || (currentUser.role === "COMMUNITY_MANAGER" && currentUser.communityId === communityId);
+      if (!canManage) return res.status(403).json({ message: "Forbidden" });
+      const { email } = req.body as { email: string };
+      if (!email || typeof email !== "string") return res.status(400).json({ message: "email is required" });
+      const inviteeEmail = email.trim().toLowerCase();
+      const community = await storage.getCommunity(communityId);
+      if (!community) return res.status(404).json({ message: "Community not found" });
+      const existingUser = await storage.getUserByEmail(inviteeEmail);
+      if (existingUser) {
+        const uc = await storage.getUserCommunity(existingUser.id, communityId);
+        if (uc?.status === "ACTIVE") return res.status(400).json({ message: "User is already in this community" });
+        const existingInvite = (await storage.getPendingInvitesByEmail(inviteeEmail)).find(i => i.communityId === communityId);
+        if (existingInvite) return res.status(400).json({ message: "Invite already sent to this email" });
+        await storage.createCommunityInvite({
+          communityId,
+          inviteeEmail,
+          inviteeId: existingUser.id,
+          invitedById: currentUser.id,
+          status: "PENDING",
+        });
+        return res.status(200).json({ message: "Invite sent. The user will see it in their profile and can accept." });
+      }
+      return res.status(200).json({ message: "User not found. Use the invite link below to share with them.", useInviteLink: true });
+    } catch (err) {
+      res.status(500).json({ message: err instanceof Error ? err.message : "Invite failed" });
+    }
+  });
+
+  app.get("/api/communities/:id/invite-link", authMiddleware, async (req: any, res) => {
+    try {
+      const currentUser = req.user;
+      const communityId = req.params.id;
+      const canManage = currentUser.role === "ADMIN" || (currentUser.role === "COMMUNITY_MANAGER" && currentUser.communityId === communityId);
+      if (!canManage) return res.status(403).json({ message: "Forbidden" });
+      const community = await storage.getCommunity(communityId);
+      if (!community) return res.status(404).json({ message: "Community not found" });
+      const baseUrl = process.env.APP_URL || (req.protocol + "://" + req.get("host"));
+      const inviteLink = `${baseUrl}/register?invite=${communityId}`;
+      return res.status(200).json({ inviteLink, communityName: community.name });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to get invite link" });
+    }
+  });
+
+  app.get("/api/invites", authMiddleware, async (req: any, res) => {
+    try {
+      const invites = await storage.getPendingInvitesByUserId(req.user.id);
+      res.status(200).json(invites);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch invites" });
+    }
+  });
+
+  app.post("/api/invites/:id/accept", authMiddleware, async (req: any, res) => {
+    try {
+      const invite = await storage.getCommunityInvite(req.params.id);
+      if (!invite) return res.status(404).json({ message: "Invite not found" });
+      if (invite.status !== "PENDING") return res.status(400).json({ message: "Invite is no longer valid" });
+      if (invite.inviteeEmail !== req.user.email?.toLowerCase()) return res.status(403).json({ message: "This invite was sent to a different email" });
+      const uc = await storage.getUserCommunity(req.user.id, invite.communityId);
+      if (uc?.status === "ACTIVE") {
+        await storage.updateCommunityInvite(invite.id, "REJECTED");
+        return res.status(400).json({ message: "You are already in this community" });
+      }
+      if (uc) await storage.updateUserCommunity(uc.id, "ACTIVE");
+      else await storage.createUserCommunity({ userId: req.user.id, communityId: invite.communityId, status: "ACTIVE" });
+      if (!req.user.communityId) await storage.updateUser(req.user.id, { communityId: invite.communityId, status: "ACTIVE", version: req.user.version });
+      await storage.updateCommunityInvite(invite.id, "ACCEPTED", req.user.id);
+      const updatedUser = await storage.getUser(req.user.id);
+      res.status(200).json(updatedUser);
+    } catch (err) {
+      res.status(500).json({ message: err instanceof Error ? err.message : "Failed to accept invite" });
+    }
+  });
+
+  app.post("/api/invites/:id/decline", authMiddleware, async (req: any, res) => {
+    try {
+      const invite = await storage.getCommunityInvite(req.params.id);
+      if (!invite) return res.status(404).json({ message: "Invite not found" });
+      if (invite.status !== "PENDING") return res.status(400).json({ message: "Invite is no longer valid" });
+      if (invite.inviteeEmail !== req.user.email?.toLowerCase()) return res.status(403).json({ message: "Forbidden" });
+      await storage.updateCommunityInvite(invite.id, "REJECTED");
+      res.status(200).json({ message: "Invite declined" });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to decline invite" });
+    }
+  });
+
   // Forum Routes
   app.get(api.communities.posts.list.path, authMiddleware, async (req, res) => {
-    const posts = await storage.getPosts(req.params.id);
+    const posts = await storage.getPostsWithAuthors(req.params.id);
     res.status(200).json(posts);
   });
 
   app.post(api.communities.posts.create.path, authMiddleware, async (req: any, res) => {
     try {
       const input = api.communities.posts.create.input.parse(req.body);
+      if (input.listingId) {
+        const listing = await storage.getListing(input.listingId);
+        if (!listing || listing.communityId !== req.params.id) {
+          return res.status(400).json({ message: "Invalid listing or listing not in this community" });
+        }
+      }
+      const { listingId, ...rest } = input;
       const post = await storage.createPost({
-        ...input,
+        ...rest,
         communityId: req.params.id,
-        authorId: req.user.id
+        authorId: req.user.id,
+        ...(listingId && { listingId }),
       });
       res.status(201).json(post);
     } catch (err) {
@@ -394,22 +523,56 @@ export async function registerRoutes(
     }
   });
 
-  app.get(api.listings.list.path, authMiddleware, async (req: any, res) => {
-    const listings = await storage.getListings();
-    // Filter listings based on visibility and user's community
-    const user = req.user;
-    const settings = await storage.getSettings();
+  app.post("/api/upload", authMiddleware, upload.single("image"), (req: any, res) => {
+    if (!req.file) return res.status(400).json({ message: "No image file provided" });
+    const url = `/uploads/${req.file.filename}`;
+    res.status(201).json({ url });
+  });
 
-    let filtered = listings;
+  app.get(api.listings.list.path, authMiddleware, async (req: any, res) => {
+    const allListings = await storage.getListings();
+    const user = req.user;
+
+    let filtered = allListings;
 
     if (user.role === "RESIDENT") {
-      filtered = listings.filter(l => {
-        if (l.visibility === "COMMUNITY_ONLY" && l.communityId === user.communityId) return true;
-        if (l.visibility === "GLOBAL" && settings.enableGlobalMarketplace) return true;
-        return false;
-      });
+      // Listings are only visible to members of that listing's community
+      const userCommunitiesList = await storage.getUserCommunities(user.id);
+      const userCommunityIds = new Set<string>();
+      if (user.communityId) userCommunityIds.add(user.communityId);
+      userCommunitiesList.filter(uc => uc.status === "ACTIVE").forEach(uc => userCommunityIds.add(uc.communityId));
+
+      filtered = allListings.filter(l => userCommunityIds.has(l.communityId));
     }
     res.status(200).json(filtered);
+  });
+
+  // Categories must be registered before :id so /api/listings/categories is not matched by :id
+  app.get(api.listings.categories.path, authMiddleware, async (req, res) => {
+    const allListings = await storage.getListings();
+    const categories = Array.from(new Set(allListings.map(l => l.category).filter(Boolean))) as string[];
+    res.status(200).json(categories);
+  });
+
+  // Single listing endpoint – only visible to members of that listing's community
+  app.get(api.listings.get.path, authMiddleware, async (req: any, res) => {
+    const listing = await storage.getListing(req.params.id);
+    if (!listing) return res.status(404).json({ message: "Listing not found" });
+
+    const user = req.user;
+
+    if (user.role === "RESIDENT") {
+      const userCommunitiesList = await storage.getUserCommunities(user.id);
+      const userCommunityIds = new Set<string>();
+      if (user.communityId) userCommunityIds.add(user.communityId);
+      userCommunitiesList.filter(uc => uc.status === "ACTIVE").forEach(uc => userCommunityIds.add(uc.communityId));
+
+      if (!userCommunityIds.has(listing.communityId)) {
+        return res.status(404).json({ message: "Listing not found" });
+      }
+    }
+
+    res.status(200).json(listing);
   });
 
   app.post(api.listings.create.path, authMiddleware, async (req: any, res) => {
@@ -427,7 +590,7 @@ export async function registerRoutes(
         sellerId: user.id,
         sellerNameSnapshot: user.sellerDisplayName || user.fullName,
         communityNameSnapshot: comm.name,
-        visibility: comm.visibility === "PUBLIC" ? "GLOBAL" : "COMMUNITY_ONLY",
+        visibility: "COMMUNITY_ONLY", // Listings are always scoped to their community only
         status: "ACTIVE",
         sellerContactSnapshot: user.phone || user.email // Default contact info
       });
@@ -438,12 +601,6 @@ export async function registerRoutes(
       }
       res.status(500).json({ message: "Error" });
     }
-  });
-
-  app.get(api.listings.categories.path, authMiddleware, async (req, res) => {
-    const allListings = await storage.getListings();
-    const categories = Array.from(new Set(allListings.map(l => l.category).filter(Boolean))) as string[];
-    res.status(200).json(categories);
   });
 
   app.put(api.listings.update.path, authMiddleware, async (req: any, res) => {
@@ -464,10 +621,136 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/listings/:id/stock", authMiddleware, async (req: any, res) => {
+    try {
+      const listing = await storage.getListing(req.params.id);
+      if (!listing) return res.status(404).json({ message: "Listing not found" });
+      if (listing.sellerId !== req.user.id && req.user.role !== "ADMIN") {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const { stockQuantity } = req.body;
+      if (typeof stockQuantity !== "number" || stockQuantity < 0) {
+        return res.status(400).json({ message: "Invalid stock quantity" });
+      }
+      const updated = await storage.updateListingStock(req.params.id, stockQuantity);
+      res.status(200).json(updated);
+    } catch (err) {
+      res.status(400).json({ message: "Error updating stock" });
+    }
+  });
+
+  app.post("/api/listings/:id/interest", authMiddleware, async (req: any, res) => {
+    try {
+      const listing = await storage.getListing(req.params.id);
+      if (!listing) return res.status(404).json({ message: "Listing not found" });
+      if (listing.listingType !== "PRODUCT") return res.status(400).json({ message: "Not a product" });
+      const stock = listing.stockQuantity ?? 0;
+      if (stock > 0) return res.status(400).json({ message: "Product is in stock. You can buy it directly." });
+      const already = await storage.hasUserExpressedInterest(req.params.id, req.user.id);
+      if (already) return res.status(400).json({ message: "You have already expressed interest." });
+      const interest = await storage.createProductInterest(req.params.id, req.user.id);
+      res.status(201).json(interest);
+    } catch (err) {
+      res.status(400).json({ message: "Error" });
+    }
+  });
+
+  app.get("/api/listings/:id/interest-count", authMiddleware, async (req: any, res) => {
+    const listing = await storage.getListing(req.params.id);
+    if (!listing) return res.status(404).json({ message: "Listing not found" });
+    if (listing.sellerId !== req.user.id && req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const count = await storage.getProductInterestsCount(req.params.id);
+    res.status(200).json({ count });
+  });
+
+  app.get(api.listingSlots.list.path, authMiddleware, async (req: any, res) => {
+    const slots = await storage.getListingSlots(req.params.id);
+    res.status(200).json(slots);
+  });
+
+  app.get(api.listingSlots.available.path, authMiddleware, async (req: any, res) => {
+    const listingId = req.params.id;
+    const dateStr = req.query.date as string;
+    if (!dateStr) return res.status(400).json({ message: "date query param required" });
+    const allSlots = await storage.getListingSlots(listingId);
+    const bookedOnDate = await storage.getBookingsForListingOnDate(listingId, dateStr);
+    const bookedSlotKeys = new Set(
+      bookedOnDate
+        .filter((b) => b.slotStartTime && b.slotEndTime)
+        .map((b) => `${b.slotStartTime}-${b.slotEndTime}`)
+    );
+    const available = allSlots.filter(
+      (s) => !bookedSlotKeys.has(`${s.startTime}-${s.endTime}`)
+    );
+    res.status(200).json(available);
+  });
+
+  app.post(api.listingSlots.create.path, authMiddleware, async (req: any, res) => {
+    try {
+      const listing = await storage.getListing(req.params.id);
+      if (!listing) return res.status(404).json({ message: "Listing not found" });
+      if (listing.sellerId !== req.user.id && req.user.role !== "ADMIN") {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const input = api.listingSlots.create.input.parse(req.body);
+      const slot = await storage.createListingSlot({
+        listingId: req.params.id,
+        startTime: input.startTime,
+        endTime: input.endTime,
+      });
+      res.status(201).json(slot);
+    } catch (err) {
+      res.status(400).json({ message: "Error creating slot" });
+    }
+  });
+
+  app.put(api.listingSlots.replace.path, authMiddleware, async (req: any, res) => {
+    try {
+      const listing = await storage.getListing(req.params.id);
+      if (!listing) return res.status(404).json({ message: "Listing not found" });
+      if (listing.sellerId !== req.user.id && req.user.role !== "ADMIN") {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const input = api.listingSlots.replace.input.parse(req.body);
+      await storage.deleteListingSlots(req.params.id);
+      const created: { id: string; listingId: string; startTime: string; endTime: string }[] = [];
+      for (const slot of input.slots) {
+        if (slot.startTime?.trim() && slot.endTime?.trim()) {
+          const s = await storage.createListingSlot({
+            listingId: req.params.id,
+            startTime: slot.startTime.trim(),
+            endTime: slot.endTime.trim(),
+          });
+          created.push(s);
+        }
+      }
+      res.status(200).json(created);
+    } catch (err) {
+      res.status(400).json({ message: "Error updating slots" });
+    }
+  });
+
   app.get(api.users.list.path, authMiddleware, async (req: any, res) => {
     if (req.user.role === "RESIDENT") return res.status(403).json({ message: "Forbidden" });
     const users = await storage.getUsers();
     res.status(200).json(users);
+  });
+
+  app.get(api.users.profile.path, authMiddleware, async (req: any, res) => {
+    const targetUserId = req.params.id;
+    const currentUser = req.user;
+    const targetUser = await storage.getUser(targetUserId);
+    if (!targetUser) return res.status(404).json({ message: "User not found" });
+    if (targetUser.communityId !== currentUser.communityId) {
+      return res.status(403).json({ message: "Can only view profiles of users in your community" });
+    }
+    res.status(200).json({
+      fullName: targetUser.fullName,
+      email: targetUser.email,
+      phone: targetUser.phone,
+    });
   });
 
   app.put(api.users.update.path, authMiddleware, async (req: any, res) => {
@@ -537,7 +820,19 @@ export async function registerRoutes(
     const bookings = user.role === "RESIDENT"
       ? await storage.getBookingsByUser(user.id)
       : await storage.getBookingsBySeller(user.id);
-    res.status(200).json(bookings);
+    const listingIds = [...new Set(bookings.map((b: any) => b.listingId))];
+    const listingsArr = await storage.getListingsByIds(listingIds);
+    const listingsMap: Record<string, any> = {};
+    listingsArr.forEach((l: any) => { listingsMap[l.id] = l; });
+    const enriched = bookings.map((b: any) => {
+      const listing = listingsMap[b.listingId];
+      return {
+        ...b,
+        listingTitle: listing?.title ?? "Service",
+        sellerName: listing?.sellerNameSnapshot ?? "Provider",
+      };
+    });
+    res.status(200).json(enriched);
   });
 
   app.post(api.bookings.create.path, authMiddleware, async (req: any, res) => {
@@ -546,11 +841,40 @@ export async function registerRoutes(
       const listing = await storage.getListing(input.listingId);
       if (!listing) return res.status(404).json({ message: "Listing not found" });
 
+      const dateStr = String(input.bookingDate);
+      const bookingDate = /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
+        ? new Date(dateStr + "T12:00:00.000Z")
+        : new Date(input.bookingDate);
+
+      const slots = await storage.getListingSlots(listing.id);
+      const slotStartTime = input.slotStartTime as string | undefined;
+      const slotEndTime = input.slotEndTime as string | undefined;
+
+      if (slots.length > 0) {
+        if (!slotStartTime || !slotEndTime) {
+          return res.status(400).json({ message: "Slot is required for this service" });
+        }
+        const dateStrForQuery = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
+        const bookedOnDate = await storage.getBookingsForListingOnDate(listing.id, dateStrForQuery);
+        const isAlreadyBooked = bookedOnDate.some(
+          (b) => b.slotStartTime === slotStartTime && b.slotEndTime === slotEndTime
+        );
+        if (isAlreadyBooked) {
+          return res.status(400).json({ message: "This slot is no longer available" });
+        }
+        const slotExists = slots.some((s) => s.startTime === slotStartTime && s.endTime === slotEndTime);
+        if (!slotExists) {
+          return res.status(400).json({ message: "Invalid slot" });
+        }
+      }
+
       const booking = await storage.createBooking({
         listingId: listing.id,
         userId: req.user.id,
         sellerId: listing.sellerId,
-        bookingDate: new Date(input.bookingDate),
+        bookingDate,
+        slotStartTime: slotStartTime || null,
+        slotEndTime: slotEndTime || null,
         status: "PENDING",
         priceSnapshot: listing.price,
       });
@@ -564,7 +888,64 @@ export async function registerRoutes(
   app.get(api.orders.list.path, authMiddleware, async (req: any, res) => {
     const user = req.user;
     const orders = await storage.getOrdersByUser(user.id);
+    const listingIds = [...new Set(orders.map((o: any) => o.listingId))];
+    const listingsArr = await storage.getListingsByIds(listingIds);
+    const listingsMap: Record<string, any> = {};
+    listingsArr.forEach((l: any) => { listingsMap[l.id] = l; });
+    const enriched = orders.map((o: any) => {
+      const listing = listingsMap[o.listingId];
+      return {
+        ...o,
+        listingTitle: listing?.title ?? "Product",
+        sellerName: listing?.sellerNameSnapshot ?? "Seller",
+      };
+    });
+    res.status(200).json(enriched);
+  });
+
+  app.get("/api/seller/orders", authMiddleware, async (req: any, res) => {
+    const orders = await storage.getOrdersBySeller(req.user.id);
     res.status(200).json(orders);
+  });
+
+  app.patch("/api/seller/orders/:id", authMiddleware, async (req: any, res) => {
+    try {
+      const order = await storage.getOrder(req.params.id);
+      if (!order) return res.status(404).json({ message: "Order not found" });
+      if (order.sellerId !== req.user.id) return res.status(403).json({ message: "Forbidden" });
+      const { status, priceSnapshot } = req.body;
+      const updates: { status?: string; priceSnapshot?: number } = {};
+      if (status && ["PENDING", "QUOTATION_PROVIDED", "CONFIRMED", "SHIPPED", "DELIVERED", "CANCELLED"].includes(status)) {
+        updates.status = status;
+      }
+      if (typeof priceSnapshot === "number" && priceSnapshot >= 0) updates.priceSnapshot = priceSnapshot;
+      if (Object.keys(updates).length === 0) return res.status(400).json({ message: "No valid updates" });
+      const updated = await storage.updateOrder(req.params.id, updates);
+      res.status(200).json(updated);
+    } catch (err) {
+      res.status(400).json({ message: "Error updating order" });
+    }
+  });
+
+  app.get("/api/seller/bookings", authMiddleware, async (req: any, res) => {
+    const bookings = await storage.getBookingsBySeller(req.user.id);
+    res.status(200).json(bookings);
+  });
+
+  app.patch("/api/seller/bookings/:id", authMiddleware, async (req: any, res) => {
+    try {
+      const booking = await storage.getBooking(req.params.id);
+      if (!booking) return res.status(404).json({ message: "Booking not found" });
+      if (booking.sellerId !== req.user.id) return res.status(403).json({ message: "Forbidden" });
+      const { status } = req.body;
+      if (!status || !["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED"].includes(status)) {
+        return res.status(400).json({ message: "Invalid status" });
+      }
+      const updated = await storage.updateBooking(req.params.id, { status });
+      res.status(200).json(updated);
+    } catch (err) {
+      res.status(400).json({ message: "Error updating booking" });
+    }
   });
 
   app.post(api.orders.create.path, authMiddleware, async (req: any, res) => {
@@ -573,12 +954,30 @@ export async function registerRoutes(
       const listing = await storage.getListing(input.listingId);
       if (!listing) return res.status(404).json({ message: "Listing not found" });
 
+      const quantity = input.quantity ?? 1;
+
+      if (listing.availabilityBasis === "STOCK" && listing.buyNowEnabled) {
+        const currentStock = listing.stockQuantity ?? 0;
+        if (currentStock <= 0) {
+          return res.status(400).json({ message: "This product is out of stock. Use 'Notify seller' to express interest." });
+        }
+        if (quantity > currentStock) {
+          return res.status(400).json({ message: `Only ${currentStock} items available.` });
+        }
+        await storage.updateListingStock(listing.id, currentStock - quantity);
+      }
+
+      const priceSnapshot = listing.buyNowEnabled ? listing.price * quantity : 0;
+
       const order = await storage.createOrder({
         listingId: listing.id,
         userId: req.user.id,
         sellerId: listing.sellerId,
+        quantity,
         status: "PENDING",
-        priceSnapshot: listing.price,
+        priceSnapshot,
+        logisticsPreference: (input.logisticsPreference as any) || "PICKUP",
+        deliveryAddress: input.deliveryAddress || null,
       });
 
       res.status(201).json(order);

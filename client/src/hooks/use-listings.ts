@@ -60,6 +60,69 @@ export function useCreateListing() {
   });
 }
 
+export function useUpdateListingStock(listingId: string) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (stockQuantity: number) => {
+      const res = await fetch(`/api/listings/${listingId}/stock`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stockQuantity }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to update stock");
+        throw new Error(message);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.listings.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.listings.get.path] });
+      queryClient.invalidateQueries({ queryKey: ["/api/listings", listingId] });
+      toast({ title: "Stock updated" });
+    },
+  });
+}
+
+export function useCreateProductInterest(listingId: string) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/listings/${listingId}/interest`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to express interest");
+        throw new Error(message);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.listings.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.listings.get.path, { id: listingId }] });
+      toast({ title: "Seller notified! They'll add stock when available." });
+    },
+  });
+}
+
+export function useProductInterestCount(listingId: string, enabled = true) {
+  return useQuery({
+    queryKey: ["/api/listings", listingId, "interest-count"],
+    queryFn: async () => {
+      const res = await fetch(`/api/listings/${listingId}/interest-count`, { credentials: "include" });
+      if (!res.ok) return { count: 0 };
+      return res.json();
+    },
+    enabled: !!listingId && enabled,
+  });
+}
+
 export function useUpdateListing() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

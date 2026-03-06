@@ -1,7 +1,8 @@
 import { Layout } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Search, ShoppingBag, MapPin, Tag, Loader2, ShoppingCart } from "lucide-react";
+import { Search, ShoppingBag, MapPin, Tag, Loader2, ShoppingCart, FileText } from "lucide-react";
+import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useListings } from "@/hooks/use-listings";
@@ -17,7 +18,7 @@ export default function ProductsMarketplace() {
 
     const products = listings?.filter(l => {
         if (l.listingType !== "PRODUCT" || l.status !== "ACTIVE") return false;
-        if (!settings?.enableGlobalMarketplace && l.communityId !== user.communityId) return false;
+        if (l.communityId !== user.communityId) return false; // Only show listings from user's current community
         return true;
     }) || [];
 
@@ -42,37 +43,40 @@ export default function ProductsMarketplace() {
                 ) : products.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                         {products.map((product) => (
-                            <Card key={product.id} className="border-border/50 shadow-sm overflow-hidden bg-white hover:shadow-md transition-all group">
-                                <div className="h-48 bg-muted/30 flex items-center justify-center relative">
-                                    <ShoppingBag className="w-16 h-16 text-primary/20 group-hover:scale-110 transition-transform" />
-                                    <div className="absolute top-3 right-3">
-                                        <Badge className="bg-primary text-white border-none shadow-sm capitalize">
-                                            {product.condition || "New"}
-                                        </Badge>
+                            <Link key={product.id} href={`/listings/${product.id}`}>
+                                <Card className="border-border/50 shadow-sm overflow-hidden bg-white hover:shadow-md transition-all group cursor-pointer">
+                                    <div className="h-48 bg-muted/30 flex items-center justify-center relative">
+                                        <ShoppingBag className="w-16 h-16 text-primary/20 group-hover:scale-110 transition-transform" />
+                                        <div className="absolute top-3 right-3">
+                                            <Badge className="bg-primary text-white border-none shadow-sm capitalize">
+                                                {product.condition || "New"}
+                                            </Badge>
+                                        </div>
                                     </div>
-                                </div>
-                                <CardContent className="p-5">
-                                    <div className="flex flex-col gap-1 mb-3">
-                                        <span className="text-[10px] font-bold text-primary uppercase tracking-widest">
-                                            {product.category || "General"}
-                                        </span>
-                                        <h3 className="text-md font-bold truncate">{product.title}</h3>
-                                    </div>
+                                    <CardContent className="p-5">
+                                        <div className="flex flex-col gap-1 mb-3">
+                                            <span className="text-[10px] font-bold text-primary uppercase tracking-widest">
+                                                {product.category || "General"}
+                                            </span>
+                                            <h3 className="text-md font-bold truncate">{product.title}</h3>
+                                        </div>
 
-                                    <div className="flex items-center gap-1 text-xs text-muted-foreground mb-4">
-                                        <MapPin className="w-3 h-3" />
-                                        <span className="truncate">{product.communityNameSnapshot}</span>
-                                    </div>
+                                        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-4">
+                                            <MapPin className="w-3 h-3" />
+                                            <span className="truncate">{product.communityNameSnapshot}</span>
+                                        </div>
 
-                                    <div className="flex items-center justify-between pt-4 border-t border-border/40">
-                                        <span className="text-xl font-bold text-foreground">₹{product.price}</span>
-                                        <Button size="sm" variant="outline" className="font-bold text-xs h-9 bg-primary/5 hover:bg-primary hover:text-white transition-all border-primary/10">
-                                            <ShoppingCart className="w-3.5 h-3.5 mr-2" />
-                                            Add
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
+                                        <div className="flex items-center justify-between pt-4 border-t border-border/40">
+                                            <span className="text-xl font-bold text-foreground">
+                                                {product.buyNowEnabled ? `₹${product.price}` : "Price on request"}
+                                            </span>
+                                            <span className="inline-flex items-center gap-2 px-3 py-2 rounded-md font-bold text-xs bg-primary/5 text-primary border border-primary/10">
+                                                {product.buyNowEnabled ? <><ShoppingCart className="w-3.5 h-3.5" />Add</> : <><FileText className="w-3.5 h-3.5" />Request Quote</>}
+                                            </span>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </Link>
                         ))}
                     </div>
                 ) : (

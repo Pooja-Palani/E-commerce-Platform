@@ -10,7 +10,11 @@ export function ListingCard({ listing }: { listing: Listing }) {
     <Link href={`/listings/${listing.id}`}>
       <Card className="group flex flex-col h-full overflow-hidden border-border/50 hover:shadow-2xl transition-all duration-300 cursor-pointer hover:-translate-y-1 bg-white">
         <div className="h-48 bg-gradient-to-br from-primary/10 to-secondary relative flex items-center justify-center overflow-hidden">
-          <Tag className="w-12 h-12 text-primary/40 group-hover:scale-110 transition-transform duration-500" />
+          {listing.imageUrl ? (
+            <img src={listing.imageUrl} alt={listing.title} className="w-full h-full object-cover" />
+          ) : (
+            <Tag className="w-12 h-12 text-primary/40 group-hover:scale-110 transition-transform duration-500" />
+          )}
           <div className="absolute top-3 right-3 flex gap-2">
             {listing.visibility === 'GLOBAL' ? (
               <Badge variant="secondary" className="bg-white/80 backdrop-blur-sm shadow-sm border-none">
@@ -22,16 +26,18 @@ export function ListingCard({ listing }: { listing: Listing }) {
               </Badge>
             )}
           </div>
-          {listing.buyNowEnabled && (
-            <div className="absolute bottom-3 left-3">
-              <Badge className="bg-primary text-white border-none shadow-lg py-0.5 px-2 text-[10px] font-bold uppercase tracking-wider">Buy Now</Badge>
-            </div>
-          )}
+          <div className="absolute bottom-3 left-3">
+            <Badge className="bg-primary text-white border-none shadow-lg py-0.5 px-2 text-[10px] font-bold uppercase tracking-wider">
+              {listing.buyNowEnabled ? "Buy Now" : "Request Quotation"}
+            </Badge>
+          </div>
         </div>
         <CardHeader className="p-5 pb-2 shrink-0">
           <div className="flex justify-between items-start gap-4">
             <h3 className="font-bold text-lg line-clamp-1 group-hover:text-primary transition-colors">{listing.title}</h3>
-            <span className="font-exrabold text-lg text-primary">₹{listing.price}</span>
+            <span className="font-exrabold text-lg text-primary">
+              {listing.buyNowEnabled ? `₹${listing.price}` : "Price on request"}
+            </span>
           </div>
         </CardHeader>
         <CardContent className="p-5 pt-0 flex-1 space-y-4">

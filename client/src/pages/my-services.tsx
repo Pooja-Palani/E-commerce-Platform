@@ -3,16 +3,35 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Wrench, Loader2 } from "lucide-react";
+import { Plus, Wrench, Loader2, Calendar } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
+import { useSellerBookings, useUpdateBookingStatus } from "@/hooks/use-bookings";
+import {
+    Table, TableBody, TableCell, TableHead, TableHeader, TableRow
+} from "@/components/ui/table";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from "@/components/ui/select";
+import { format } from "date-fns";
 
 export default function MyServices() {
     const { data: listings, isLoading } = useQuery<any[]>({
         queryKey: ["/api/my-listings"],
     });
+    const { data: sellerBookings = [], isLoading: loadingBookings } = useSellerBookings();
+    const updateBookingStatus = useUpdateBookingStatus();
 
     const services = listings?.filter(l => l.listingType === "SERVICE") || [];
+    const getListingTitle = (listingId: string) =>
+        services.find(s => s.id === listingId)?.title || "Service";
+
+    const BOOKING_STATUS_OPTIONS = [
+        { value: "PENDING", label: "Pending" },
+        { value: "CONFIRMED", label: "Confirmed" },
+        { value: "COMPLETED", label: "Completed" },
+        { value: "CANCELLED", label: "Cancelled" },
+    ];
 
     return (
         <Layout>
@@ -29,6 +48,60 @@ export default function MyServices() {
                         </Button>
                     </Link>
                 </div>
+
+                {sellerBookings.length > 0 && (
+                    <Card className="border-border/50 shadow-sm overflow-hidden bg-white">
+                        <CardContent className="p-0">
+                            <div className="bg-muted/5 border-b border-border/40 py-4 px-6">
+                                <div className="flex items-center gap-2">
+                                    <Calendar className="w-5 h-5 text-primary" />
+                                    <h3 className="text-lg font-bold">Bookings for your services</h3>
+                                </div>
+                                <p className="text-sm text-muted-foreground mt-1">Incoming service bookings</p>
+                            </div>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableHead className="font-bold text-xs uppercase tracking-wider pl-6">Service</TableHead>
+                                        <TableHead className="font-bold text-xs uppercase tracking-wider">Date</TableHead>
+                                        <TableHead className="font-bold text-xs uppercase tracking-wider">Price</TableHead>
+                                        <TableHead className="font-bold text-xs uppercase tracking-wider text-right pr-6">Status</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {sellerBookings.map((booking: any) => (
+                                        <TableRow key={booking.id} className="hover:bg-muted/5 transition-colors">
+                                            <TableCell className="font-medium pl-6">{getListingTitle(booking.listingId)}</TableCell>
+                                            <TableCell className="text-muted-foreground">
+                                                {format(new Date(booking.bookingDate), "MMM d, yyyy")}
+                                                {booking.slotStartTime && booking.slotEndTime && (
+                                                    <span className="ml-1">({booking.slotStartTime}–{booking.slotEndTime})</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="font-bold">₹{booking.priceSnapshot}</TableCell>
+                                            <TableCell className="text-right pr-6">
+                                                <Select
+                                                    value={booking.status}
+                                                    onValueChange={(status) => updateBookingStatus.mutate({ bookingId: booking.id, status })}
+                                                    disabled={updateBookingStatus.isPending}
+                                                >
+                                                    <SelectTrigger className="w-[130px] h-8 ml-auto border-0 shadow-none bg-transparent focus:ring-0">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {BOOKING_STATUS_OPTIONS.map((opt) => (
+                                                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {isLoading ? (
                     <div className="flex items-center justify-center h-64">
@@ -56,7 +129,9 @@ export default function MyServices() {
                                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Price</span>
                                             <span className="text-lg font-bold text-primary">₹{service.price}</span>
                                         </div>
-                                        <Button variant="outline" size="sm" className="font-bold text-xs h-8">Edit Listing</Button>
+                                        <Link href={`/listings/${service.id}`}>
+                                            <Button variant="outline" size="sm" className="font-bold text-xs h-8">Edit Listing</Button>
+                                        </Link>
                                     </div>
                                 </CardContent>
                             </Card>

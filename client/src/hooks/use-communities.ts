@@ -128,7 +128,11 @@ export function useJoinCommunity() {
       useAuthStore.getState().setUser(updatedUser);
       queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
       queryClient.invalidateQueries({ queryKey: ["/api/users", updatedUser.id, "communities"] });
-      toast({ title: "Join request sent", description: "Your community manager will approve your request soon." });
+      const isApproved = updatedUser.status === "ACTIVE";
+      toast({
+        title: isApproved ? "You've joined the community!" : "Join request sent",
+        description: isApproved ? "You can now browse listings and participate." : "Your community manager will approve your request soon.",
+      });
     }
   });
 }
@@ -157,6 +161,90 @@ export function useDeleteCommunity() {
     onError: (error: Error) => {
       toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     }
+  });
+}
+
+export function usePendingInvites() {
+  return useQuery({
+    queryKey: ["/api/invites"],
+    queryFn: async () => {
+      const res = await fetch("/api/invites", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch invites");
+      return res.json();
+    },
+  });
+}
+
+export function useAcceptInvite() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (inviteId: string) => {
+      const res = await fetch(`/api/invites/${inviteId}/accept`, { method: "POST", credentials: "include" });
+      if (!res.ok) throw new Error((await res.json()).message || "Failed to accept");
+      return res.json();
+    },
+    onSuccess: (user) => {
+      useAuthStore.getState().setUser(user);
+      queryClient.invalidateQueries({ queryKey: ["/api/invites"] });
+      queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", user?.id, "communities"] });
+      toast({ title: "Invite accepted", description: "You've joined the community." });
+    },
+    onError: (err: Error) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
+}
+
+export function useDeclineInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (inviteId: string) => {
+      const res = await fetch(`/api/invites/${inviteId}/decline`, { method: "POST", credentials: "include" });
+      if (!res.ok) throw new Error("Failed to decline");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/invites"] });
+    },
+  });
+}
+
+export function useInviteByEmail(communityId: string | undefined) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (email: string) => {
+      const res = await fetch(`/api/communities/${communityId}/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Invite failed");
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/communities", communityId, "members"] });
+      if (data.useInviteLink) {
+        toast({ title: "User not on the app", description: "Use the invite link below to share with them." });
+      } else {
+        toast({ title: "Invite sent", description: "The user will see it in their profile." });
+      }
+    },
+    onError: (err: Error) => toast({ title: "Invite failed", description: err.message, variant: "destructive" }),
+  });
+}
+
+export function useInviteLink(communityId: string | undefined) {
+  return useQuery({
+    queryKey: ["/api/communities", communityId, "invite-link"],
+    queryFn: async () => {
+      const res = await fetch(`/api/communities/${communityId}/invite-link`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to get link");
+      return res.json();
+    },
+    enabled: !!communityId,
   });
 }
 

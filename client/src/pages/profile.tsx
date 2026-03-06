@@ -1,6 +1,6 @@
 import { Layout } from "@/components/layout";
 import { useAuthStore } from "@/store/use-auth";
-import { useCommunities, useUserCommunities, useJoinCommunity } from "@/hooks/use-communities";
+import { useCommunities, useUserCommunities, useJoinCommunity, usePendingInvites, useAcceptInvite, useDeclineInvite } from "@/hooks/use-communities";
 import { useUpdateUser } from "@/hooks/use-users";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { User, Mail, Shield, MapPin, Phone, Info, Building2, CheckCircle, Clock } from "lucide-react";
@@ -17,7 +17,10 @@ export default function Profile() {
     const setViewMode = useAuthStore((state) => state.setViewMode);
     const { data: allCommunities, isLoading: loadingAll } = useCommunities();
     const { data: memberships = [], isLoading: loadingMemberships } = useUserCommunities(user?.id || "");
+    const { data: pendingInvites = [] } = usePendingInvites();
     const join = useJoinCommunity();
+    const acceptInvite = useAcceptInvite();
+    const declineInvite = useDeclineInvite();
     const update = useUpdateUser();
 
     if (!user || loadingAll || loadingMemberships) {
@@ -103,7 +106,15 @@ export default function Profile() {
                                                 <Switch
                                                     id="profile-view-mode"
                                                     checked={viewMode === 'SELLER'}
-                                                    onCheckedChange={(checked) => setViewMode(checked ? 'SELLER' : 'BUYER')}
+                                                    onCheckedChange={(checked) => {
+                                                        setViewMode(checked ? 'SELLER' : 'BUYER');
+                                                        if (checked && !user.isSeller) {
+                                                            update.mutate(
+                                                                { id: user.id, data: { isSeller: true, version: user.version } },
+                                                                { onSuccess: (updated) => useAuthStore.getState().setUser(updated) }
+                                                            );
+                                                        }
+                                                    }}
                                                     className="data-[state=checked]:bg-orange-500"
                                                 />
                                                 <Label htmlFor="profile-view-mode" className={`text-xs font-bold ${viewMode === 'SELLER' ? 'text-foreground' : 'text-muted-foreground'}`}>
@@ -120,6 +131,44 @@ export default function Profile() {
                         </CardContent>
                     </Card>
                 </div>
+
+                {pendingInvites.length > 0 && (
+                    <div className="border border-amber-200 bg-amber-50/30 rounded-xl shadow-sm overflow-hidden">
+                        <div className="bg-amber-100/50 p-6 border-b border-amber-200">
+                            <h2 className="text-xl font-bold flex items-center gap-2 text-amber-900">
+                                <Info className="w-5 h-5" /> Community invites
+                            </h2>
+                            <p className="text-amber-800/80 mt-1 text-sm">You've been invited to join these communities.</p>
+                        </div>
+                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {pendingInvites.map((inv: any) => (
+                                <Card key={inv.id} className="border-amber-200 bg-white">
+                                    <CardContent className="pt-6">
+                                        <h4 className="font-bold">{inv.community?.name || "Community"}</h4>
+                                        <p className="text-sm text-muted-foreground mt-1">Invitation from your community manager</p>
+                                        <div className="flex gap-2 mt-4">
+                                            <Button
+                                                size="sm"
+                                                onClick={() => acceptInvite.mutate(inv.id)}
+                                                disabled={acceptInvite.isPending}
+                                            >
+                                                Accept
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => declineInvite.mutate(inv.id)}
+                                                disabled={declineInvite.isPending}
+                                            >
+                                                Decline
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <div className="border border-border/50 bg-white rounded-xl shadow-sm overflow-hidden">
                     <div className="bg-slate-50 p-6 border-b border-border/50">

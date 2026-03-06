@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, communities, listings, auditLogs, bookings, orders,
+  users, communities, listings, listingSlots, auditLogs, bookings, orders, productInterests,
   type User, type InsertUser, type UpdateUserRequest,
   type Community, type InsertCommunity, type UpdateCommunityRequest,
   type Listing, type InsertListing, type UpdateListingRequest,
@@ -8,10 +8,11 @@ import {
   type PlatformSettings, type UpdatePlatformSettingsRequest,
   platformSettings,
   userCommunities, type UserCommunity, type InsertUserCommunity,
+  communityInvites, type CommunityInvite, type InsertCommunityInvite,
   posts, type Post, type InsertPost,
   comments, type Comment, type InsertComment
 } from "@shared/schema";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, or, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -36,20 +37,44 @@ export interface IStorage {
   getUserCommunity(userId: string, communityId: string): Promise<UserCommunity | undefined>;
   updateUserCommunity(id: string, status: string): Promise<UserCommunity | undefined>;
 
+  createCommunityInvite(data: InsertCommunityInvite): Promise<CommunityInvite>;
+  getCommunityInvite(id: string): Promise<CommunityInvite | undefined>;
+  getPendingInvitesByEmail(email: string): Promise<(CommunityInvite & { community?: Community })[]>;
+  getPendingInvitesByUserId(userId: string): Promise<(CommunityInvite & { community?: Community })[]>;
+  updateCommunityInvite(id: string, status: "PENDING" | "ACCEPTED" | "REJECTED", inviteeId?: string): Promise<CommunityInvite | undefined>;
+
   // Listings
   getListing(id: string): Promise<Listing | undefined>;
+  getListingsByIds(ids: string[]): Promise<Listing[]>;
   getListings(): Promise<Listing[]>;
   getListingsBySeller(sellerId: string): Promise<Listing[]>;
   createListing(listing: InsertListing): Promise<Listing>;
   updateListing(id: string, updates: UpdateListingRequest): Promise<Listing | undefined>;
+  updateListingStock(id: string, stockQuantity: number): Promise<Listing | undefined>;
+
+  // Product Interests (when stock is 0)
+  createProductInterest(listingId: string, userId: string): Promise<{ id: string; listingId: string; userId: string; createdAt: Date }>;
+  getProductInterestsCount(listingId: string): Promise<number>;
+  getProductInterestsByListing(listingId: string): Promise<{ id: string; listingId: string; userId: string; createdAt: Date }[]>;
+  hasUserExpressedInterest(listingId: string, userId: string): Promise<boolean>;
+
+  // Listing Slots (for services)
+  getListingSlots(listingId: string): Promise<{ id: string; listingId: string; startTime: string; endTime: string }[]>;
+  createListingSlot(slot: { listingId: string; startTime: string; endTime: string }): Promise<{ id: string; listingId: string; startTime: string; endTime: string }>;
+  deleteListingSlots(listingId: string): Promise<void>;
+  getBookingsForListingOnDate(listingId: string, dateStr: string): Promise<Booking[]>;
 
   // Bookings
   createBooking(booking: any): Promise<Booking>;
   getBookings(): Promise<Booking[]>;
+  updateBooking(id: string, updates: { status?: string }): Promise<Booking | undefined>;
+  getBooking(id: string): Promise<Booking | undefined>;
 
   // Orders
   createOrder(order: any): Promise<Order>;
   getOrders(): Promise<Order[]>;
+  updateOrder(id: string, updates: { status?: string; priceSnapshot?: number }): Promise<Order | undefined>;
+  getOrder(id: string): Promise<Order | undefined>;
 
   // Audit Logs
   getAuditLogs(): Promise<AuditLog[]>;
@@ -140,7 +165,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCommunityMembers(communityId: string): Promise<User[]> {
-    return await db.select().from(users).where(eq(users.communityId, communityId));
+    const fromUserCommunities = await db.select({ user: users })
+      .from(userCommunities)
+      .innerJoin(users, eq(userCommunities.userId, users.id))
+      .where(and(eq(userCommunities.communityId, communityId), eq(userCommunities.status, "ACTIVE")));
+    const fromPrimary = await db.select().from(users)
+      .where(eq(users.communityId, communityId));
+    const seen = new Set<string>();
+    const result: User[] = [];
+    for (const { user } of fromUserCommunities) {
+      if (!seen.has(user.id)) {
+        seen.add(user.id);
+        result.push(user);
+      }
+    }
+    for (const user of fromPrimary) {
+      if (!seen.has(user.id)) {
+        seen.add(user.id);
+        result.push(user);
+      }
+    }
+    return result;
   }
 
   async createUserCommunity(data: InsertUserCommunity): Promise<UserCommunity> {
@@ -162,10 +207,49 @@ export class DatabaseStorage implements IStorage {
     return uc;
   }
 
+  async createCommunityInvite(data: InsertCommunityInvite): Promise<CommunityInvite> {
+    const [inv] = await db.insert(communityInvites).values(data).returning();
+    return inv;
+  }
+
+  async getCommunityInvite(id: string): Promise<CommunityInvite | undefined> {
+    const [inv] = await db.select().from(communityInvites).where(eq(communityInvites.id, id));
+    return inv;
+  }
+
+  async getPendingInvitesByEmail(email: string): Promise<(CommunityInvite & { community?: Community })[]> {
+    const rows = await db.select().from(communityInvites)
+      .where(and(eq(communityInvites.inviteeEmail, email.toLowerCase().trim()), eq(communityInvites.status, "PENDING")));
+    const result: (CommunityInvite & { community?: Community })[] = [];
+    for (const r of rows) {
+      const [comm] = await db.select().from(communities).where(eq(communities.id, r.communityId));
+      result.push({ ...r, community: comm });
+    }
+    return result;
+  }
+
+  async getPendingInvitesByUserId(userId: string): Promise<(CommunityInvite & { community?: Community })[]> {
+    const user = await this.getUser(userId);
+    if (!user?.email) return [];
+    return this.getPendingInvitesByEmail(user.email);
+  }
+
+  async updateCommunityInvite(id: string, status: "PENDING" | "ACCEPTED" | "REJECTED", inviteeId?: string): Promise<CommunityInvite | undefined> {
+    const updates: Partial<CommunityInvite> = { status };
+    if (inviteeId) updates.inviteeId = inviteeId;
+    const [inv] = await db.update(communityInvites).set(updates).where(eq(communityInvites.id, id)).returning();
+    return inv;
+  }
+
   // Listings
   async getListing(id: string): Promise<Listing | undefined> {
     const [listing] = await db.select().from(listings).where(eq(listings.id, id));
     return listing;
+  }
+
+  async getListingsByIds(ids: string[]): Promise<Listing[]> {
+    if (ids.length === 0) return [];
+    return await db.select().from(listings).where(inArray(listings.id, ids));
   }
 
   async getListings(): Promise<Listing[]> {
@@ -190,6 +274,35 @@ export class DatabaseStorage implements IStorage {
     return updatedListing;
   }
 
+  async updateListingStock(id: string, stockQuantity: number): Promise<Listing | undefined> {
+    const [updated] = await db.update(listings)
+      .set({ stockQuantity: Math.max(0, stockQuantity) })
+      .where(eq(listings.id, id))
+      .returning();
+    return updated;
+  }
+
+  async createProductInterest(listingId: string, userId: string) {
+    const [interest] = await db.insert(productInterests).values({ listingId, userId }).returning();
+    return interest;
+  }
+
+  async getProductInterestsCount(listingId: string): Promise<number> {
+    const rows = await db.select().from(productInterests).where(eq(productInterests.listingId, listingId));
+    return rows.length;
+  }
+
+  async getProductInterestsByListing(listingId: string) {
+    return await db.select().from(productInterests).where(eq(productInterests.listingId, listingId));
+  }
+
+  async hasUserExpressedInterest(listingId: string, userId: string): Promise<boolean> {
+    const rows = await db.select().from(productInterests).where(
+      and(eq(productInterests.listingId, listingId), eq(productInterests.userId, userId))
+    );
+    return rows.length > 0;
+  }
+
   // Bookings
   async getBookingsByUser(userId: string): Promise<Booking[]> {
     return await db.select().from(bookings).where(eq(bookings.userId, userId));
@@ -204,8 +317,40 @@ export class DatabaseStorage implements IStorage {
     return newBooking;
   }
 
+  async updateBooking(id: string, updates: { status?: string }): Promise<Booking | undefined> {
+    const [updated] = await db.update(bookings).set(updates).where(eq(bookings.id, id)).returning();
+    return updated;
+  }
+
+  async getBooking(id: string): Promise<Booking | undefined> {
+    const [booking] = await db.select().from(bookings).where(eq(bookings.id, id));
+    return booking;
+  }
+
   async getBookings(): Promise<Booking[]> {
     return await db.select().from(bookings);
+  }
+
+  async getListingSlots(listingId: string) {
+    return await db.select().from(listingSlots).where(eq(listingSlots.listingId, listingId));
+  }
+
+  async createListingSlot(slot: { listingId: string; startTime: string; endTime: string }) {
+    const [newSlot] = await db.insert(listingSlots).values(slot).returning();
+    return newSlot;
+  }
+
+  async deleteListingSlots(listingId: string) {
+    await db.delete(listingSlots).where(eq(listingSlots.listingId, listingId));
+  }
+
+  async getBookingsForListingOnDate(listingId: string, dateStr: string): Promise<Booking[]> {
+    const all = await db.select().from(bookings).where(eq(bookings.listingId, listingId));
+    return all.filter((b) => {
+      const d = new Date(b.bookingDate);
+      const bookingDateStr = d.toISOString().split("T")[0];
+      return bookingDateStr === dateStr && b.status !== "CANCELLED";
+    });
   }
 
   // Orders
@@ -220,6 +365,16 @@ export class DatabaseStorage implements IStorage {
   async createOrder(order: any): Promise<Order> {
     const [newOrder] = await db.insert(orders).values(order).returning();
     return newOrder;
+  }
+
+  async updateOrder(id: string, updates: { status?: string; priceSnapshot?: number }): Promise<Order | undefined> {
+    const [updated] = await db.update(orders).set(updates).where(eq(orders.id, id)).returning();
+    return updated;
+  }
+
+  async getOrder(id: string): Promise<Order | undefined> {
+    const [order] = await db.select().from(orders).where(eq(orders.id, id));
+    return order;
   }
 
   async getOrders(): Promise<Order[]> {
@@ -259,12 +414,29 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(posts).where(eq(posts.communityId, communityId)).orderBy(posts.createdAt);
   }
 
+  async getPostsWithAuthors(communityId: string): Promise<(Post & { author: { fullName: string; email: string | null; phone: string | null }; listing: Listing | null })[]> {
+    const allPosts = await db.select().from(posts).where(eq(posts.communityId, communityId)).orderBy(posts.createdAt);
+    const authorIds = [...new Set(allPosts.map(p => p.authorId))];
+    const listingIds = [...new Set(allPosts.map(p => p.listingId).filter(Boolean) as string[])];
+    const [authorsList, listingsList] = await Promise.all([
+      authorIds.length ? db.select({ id: users.id, fullName: users.fullName, email: users.email, phone: users.phone }).from(users).where(inArray(users.id, authorIds)) : [],
+      listingIds.length ? db.select().from(listings).where(inArray(listings.id, listingIds)) : [],
+    ]);
+    const authorsMap = Object.fromEntries((authorsList as { id: string; fullName: string; email: string | null; phone: string | null }[]).map(a => [a.id, { fullName: a.fullName, email: a.email, phone: a.phone }]));
+    const listingsMap = Object.fromEntries((listingsList as Listing[]).map(l => [l.id, l]));
+    return allPosts.map(post => ({
+      ...post,
+      author: authorsMap[post.authorId] ?? { fullName: "Unknown", email: null, phone: null },
+      listing: post.listingId ? (listingsMap[post.listingId] ?? null) : null,
+    }));
+  }
+
   async getPost(id: string): Promise<Post | undefined> {
     const [post] = await db.select().from(posts).where(eq(posts.id, id));
     return post;
   }
 
-  async createPost(post: InsertPost): Promise<Post> {
+  async createPost(post: InsertPost & { listingId?: string }): Promise<Post> {
     const [newPost] = await db.insert(posts).values(post).returning();
     return newPost;
   }

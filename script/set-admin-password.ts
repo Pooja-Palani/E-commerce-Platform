@@ -20,8 +20,8 @@ async function main() {
   }
   const salt = await bcrypt.genSalt(10);
   const passwordHash = await bcrypt.hash(newPassword, salt);
-  await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, user.id));
-  console.log(`Password updated for ${email}. You can now log in with that password.`);
+  await db.update(users).set({ passwordHash, status: "ACTIVE", updatedAt: new Date() }).where(eq(users.id, user.id));
+  console.log(`Password updated and account activated for ${email}. You can now log in with that password.`);
   process.exit(0);
 }
 

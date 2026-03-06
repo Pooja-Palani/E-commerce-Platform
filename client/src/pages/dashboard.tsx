@@ -179,7 +179,7 @@ export default function Dashboard() {
           {[
             { title: "Home Services", desc: "Plumbing, Cleaning & more", icon: Wrench, color: "bg-blue-500", url: "/services" },
             { title: "Local Market", desc: "Gadgets & Daily needs", icon: ShoppingBag, color: "bg-orange-500", url: "/products" },
-            { title: "Community Talks", desc: "Join the discussion", icon: MessageSquare, color: "bg-purple-500", url: "/forum" },
+            { title: "Community Chat", desc: "Share & connect", icon: MessageSquare, color: "bg-purple-500", url: "/forum" },
             { title: "My Activity", desc: "Track your orders", icon: Calendar, color: "bg-indigo-500", url: "/activity" },
           ].map((cat, i) => (
             <Link key={i} href={cat.url}>
@@ -255,9 +255,9 @@ export default function Dashboard() {
           {/* Sidebar Feed: Community Talks */}
           <div className="space-y-8">
             <div className="flex items-center justify-between">
-              <h3 className="text-2xl font-bold tracking-tight">Community Talk</h3>
+              <h3 className="text-2xl font-bold tracking-tight">Community Chat</h3>
               <Link href="/forum" className="group text-sm font-bold text-primary flex items-center gap-1">
-                Forum <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                Chat <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
               </Link>
             </div>
 
@@ -265,7 +265,7 @@ export default function Dashboard() {
               <CardContent className="p-4 space-y-4">
                 {posts && posts.length > 0 ? (
                   posts.slice(0, 5).map((post) => (
-                    <Link key={post.id} href={`/forum/post/${post.id}`}>
+                    <Link key={post.id} href="/forum">
                       <div className="p-4 rounded-2xl bg-white border border-border/30 hover:border-primary/50 hover:shadow-lg transition-all cursor-pointer group">
                         <h5 className="font-bold text-sm line-clamp-1 group-hover:text-primary transition-colors mb-1">{post.title}</h5>
                         <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
@@ -277,15 +277,15 @@ export default function Dashboard() {
                 ) : (
                   <div className="py-12 text-center space-y-3">
                     <MessageSquare className="w-12 h-12 text-muted-foreground/30 mx-auto" />
-                    <p className="text-xs font-bold text-muted-foreground px-8">No discussions yet. Start one today!</p>
+                    <p className="text-xs font-bold text-muted-foreground px-8">No messages yet. Start the conversation!</p>
                     <Button variant="outline" size="sm" className="rounded-xl font-bold border-primary/20" asChild>
-                      <Link href="/forum">Start a Talk</Link>
+                      <Link href="/forum">Open Chat</Link>
                     </Button>
                   </div>
                 )}
                 <Link href="/forum">
                   <Button variant="ghost" className="w-full text-primary font-bold hover:bg-primary/5 rounded-xl">
-                    Check all discussions
+                    Open Chat
                   </Button>
                 </Link>
               </CardContent>
@@ -300,7 +300,7 @@ export default function Dashboard() {
                 <h4 className="font-bold text-lg">New here?</h4>
                 <p className="text-xs text-white/80 leading-relaxed font-medium">Explore how our community platform works and how you can start selling today.</p>
                 <Button className="w-full bg-white text-indigo-700 hover:bg-white/90 rounded-xl font-bold" asChild>
-                  <Link href="/forum">Explore Forum</Link>
+                  <Link href="/forum">Open Chat</Link>
                 </Button>
               </div>
             </Card>

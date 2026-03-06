@@ -37,7 +37,7 @@ import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/store/use-auth";
 import { useLogout } from "@/hooks/use-auth-api";
 import { useAdminSettings } from "@/hooks/use-admin";
-import { useCommunities, useUserCommunities } from "@/hooks/use-communities";
+import { useCommunities, useUserCommunities, usePendingInvites } from "@/hooks/use-communities";
 import { useUpdateUser } from "@/hooks/use-users";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link, useLocation } from "wouter";
@@ -51,6 +51,7 @@ export function AppSidebar() {
   const { data: settings } = useAdminSettings();
   const { data: communities } = useCommunities();
   const { data: userCommunitiesData = [] } = useUserCommunities(user?.id ?? "");
+  const { data: pendingInvites = [] } = usePendingInvites();
   const updateUser = useUpdateUser();
   const userCommunity = communities?.find(c => c.id === user?.communityId);
   const activeMemberships = userCommunitiesData
@@ -67,13 +68,12 @@ export function AppSidebar() {
 
   const navigationItems = [
     { title: "Dashboard", url: "/", icon: LayoutDashboard },
-    { title: "Community Forum", url: "/forum", icon: MessageSquare },
-    { title: "My Activity", url: "/activity", icon: Calendar },
+    { title: "Community Chat", url: "/forum", icon: MessageSquare },
+    ...(viewMode === "BUYER" ? [{ title: "My Activity", url: "/activity", icon: Calendar }] : []),
     ...(user.role === "RESIDENT" && viewMode === "BUYER" ? [] : [
       { title: "My Services", url: "/my-services", icon: Wrench },
       { title: "My Products", url: "/my-products", icon: Package },
     ]),
-    { title: "Cart", url: "/cart", icon: ShoppingCart },
   ];
 
   const marketplaceItems = [
@@ -150,7 +150,15 @@ export function AppSidebar() {
                   <Switch
                     id="view-mode"
                     checked={viewMode === 'SELLER'}
-                    onCheckedChange={(checked) => setViewMode(checked ? 'SELLER' : 'BUYER')}
+                    onCheckedChange={(checked) => {
+                      setViewMode(checked ? 'SELLER' : 'BUYER');
+                      if (checked && !user.isSeller) {
+                        updateUser.mutate(
+                          { id: user.id, data: { isSeller: true, version: user.version } },
+                          { onSuccess: (updated) => useAuthStore.getState().setUser(updated) }
+                        );
+                      }
+                    }}
                     className="data-[state=checked]:bg-orange-500"
                   />
                 </div>
@@ -278,14 +286,17 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 border-t border-border/50">
         <div className="flex flex-col gap-4">
           <Link href="/profile">
-            <button className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-primary/5 transition-all group text-left">
+            <button className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-primary/5 transition-all group text-left relative">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all shadow-sm">
                 <User size={18} />
               </div>
-              <div className="flex flex-col min-w-0">
+              <div className="flex flex-col min-w-0 flex-1">
                 <span className="text-sm font-bold text-foreground truncate">{user.fullName}</span>
                 <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider truncate">
                   {user.role.toLowerCase().replace('_', ' ')}
+                  {pendingInvites.length > 0 && (
+                    <span className="ml-1 text-amber-600 font-bold"> • {pendingInvites.length} invite{pendingInvites.length > 1 ? "s" : ""}</span>
+                  )}
                 </span>
               </div>
             </button>

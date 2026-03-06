@@ -48,7 +48,7 @@ export default function ManagerProducts() {
 
                                             <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-auto">
                                                 <div className="font-bold text-emerald-600 border border-emerald-100 bg-emerald-50/50 px-2.5 py-1 rounded-md">
-                                                    ₹{(product.price / 100).toLocaleString()}
+                                                    {product.buyNowEnabled ? `₹${product.price}` : "Given for quotation"}
                                                 </div>
                                                 <div className="flex gap-2">
                                                     <Eye className="w-4 h-4 text-slate-400" />

@@ -1,18 +1,39 @@
 import { Layout } from "@/components/layout";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@shared/routes";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, ShoppingBag, Loader2 } from "lucide-react";
+import { Plus, ShoppingBag, Loader2, FileText } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
+import { useSellerOrders, useUpdateOrderStatus } from "@/hooks/use-orders";
+import {
+    Table, TableBody, TableCell, TableHead, TableHeader, TableRow
+} from "@/components/ui/table";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from "@/components/ui/select";
+import { format } from "date-fns";
 
 export default function MyProducts() {
     const { data: listings, isLoading } = useQuery<any[]>({
         queryKey: ["/api/my-listings"],
     });
+    const { data: sellerOrders = [], isLoading: loadingOrders } = useSellerOrders();
 
     const products = listings?.filter(l => l.listingType === "PRODUCT") || [];
+    const getListingTitle = (listingId: string) =>
+        products.find(p => p.id === listingId)?.title || "Product";
+    const updateOrderStatus = useUpdateOrderStatus();
+
+    const ORDER_STATUS_OPTIONS = [
+        { value: "PENDING", label: "Pending" },
+        { value: "QUOTATION_PROVIDED", label: "Quotation Provided" },
+        { value: "CONFIRMED", label: "Confirmed" },
+        { value: "SHIPPED", label: "Shipped" },
+        { value: "DELIVERED", label: "Delivered" },
+        { value: "CANCELLED", label: "Cancelled" },
+    ];
 
     return (
         <Layout>
@@ -29,6 +50,60 @@ export default function MyProducts() {
                         </Button>
                     </Link>
                 </div>
+
+                {sellerOrders.length > 0 && (
+                    <Card className="border-border/50 shadow-sm overflow-hidden bg-white">
+                        <CardHeader className="bg-muted/5 border-b border-border/40 py-4">
+                            <div className="flex items-center gap-2">
+                                <FileText className="w-5 h-5 text-primary" />
+                                <CardTitle className="text-lg font-bold">Orders for your products</CardTitle>
+                            </div>
+                            <p className="text-sm text-muted-foreground">Incoming orders and quotation requests</p>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableHead className="font-bold text-xs uppercase tracking-wider pl-6">Product</TableHead>
+                                        <TableHead className="font-bold text-xs uppercase tracking-wider">Date</TableHead>
+                                        <TableHead className="font-bold text-xs uppercase tracking-wider">Price</TableHead>
+                                        <TableHead className="font-bold text-xs uppercase tracking-wider text-right pr-6">Status</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {sellerOrders.map((order: any) => (
+                                        <TableRow key={order.id} className="hover:bg-muted/5 transition-colors">
+                                            <TableCell className="font-medium pl-6">
+                                                {getListingTitle(order.listingId)}
+                                                {order.quantity > 1 && <span className="text-muted-foreground font-normal ml-1">(×{order.quantity})</span>}
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground">{format(new Date(order.createdAt), "MMM d, yyyy")}</TableCell>
+                                            <TableCell className="font-bold">
+                                                {order.priceSnapshot === 0 ? "Quotation requested" : `₹${order.priceSnapshot}`}
+                                            </TableCell>
+                                            <TableCell className="text-right pr-6">
+                                                <Select
+                                                    value={order.status}
+                                                    onValueChange={(status) => updateOrderStatus.mutate({ orderId: order.id, status })}
+                                                    disabled={updateOrderStatus.isPending}
+                                                >
+                                                    <SelectTrigger className="w-[140px] h-8 ml-auto border-0 shadow-none bg-transparent focus:ring-0">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {ORDER_STATUS_OPTIONS.map((opt) => (
+                                                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {isLoading ? (
                     <div className="flex items-center justify-center h-64">
@@ -56,7 +131,9 @@ export default function MyProducts() {
                                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Price</span>
                                             <span className="text-lg font-bold text-primary">₹{product.price}</span>
                                         </div>
-                                        <Button variant="outline" size="sm" className="font-bold text-xs h-8">Edit Listing</Button>
+                                        <Link href={`/listings/${product.id}`}>
+                                            <Button variant="outline" size="sm" className="font-bold text-xs h-8">Edit Listing</Button>
+                                        </Link>
                                     </div>
                                 </CardContent>
                             </Card>

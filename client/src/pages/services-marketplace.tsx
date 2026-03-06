@@ -1,7 +1,7 @@
 import { Layout } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Search, Wrench, MapPin, Star, Loader2 } from "lucide-react";
+import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useListings } from "@/hooks/use-listings";
@@ -17,7 +17,7 @@ export default function ServicesMarketplace() {
 
     const services = listings?.filter(l => {
         if (l.listingType !== "SERVICE" || l.status !== "ACTIVE") return false;
-        if (!settings?.enableGlobalMarketplace && l.communityId !== user.communityId) return false;
+        if (l.communityId !== user.communityId) return false; // Only show listings from user's current community
         return true;
     }) || [];
 
@@ -42,7 +42,8 @@ export default function ServicesMarketplace() {
                 ) : services.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {services.map((service) => (
-                            <Card key={service.id} className="border-border/50 shadow-sm overflow-hidden bg-white hover:shadow-md transition-all group">
+                            <Link key={service.id} href={`/listings/${service.id}`}>
+                                <Card className="border-border/50 shadow-sm overflow-hidden bg-white hover:shadow-md transition-all group cursor-pointer">
                                 <div className="h-40 bg-muted/30 flex items-center justify-center relative">
                                     <Wrench className="w-12 h-12 text-primary/20 group-hover:scale-110 transition-transform" />
                                     <div className="absolute top-3 left-3">
@@ -76,10 +77,13 @@ export default function ServicesMarketplace() {
                                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Starts from</span>
                                             <span className="text-lg font-bold text-primary">₹{service.price}</span>
                                         </div>
-                                        <Button className="font-bold text-xs h-9 shadow-sm">Book Now</Button>
+                                        <span className="inline-flex items-center justify-center rounded-md font-bold text-xs h-9 px-4 bg-primary text-primary-foreground shadow-sm hover:bg-primary/90">
+                                            Book Now
+                                        </span>
                                     </div>
                                 </CardContent>
                             </Card>
+                            </Link>
                         ))}
                     </div>
                 ) : (

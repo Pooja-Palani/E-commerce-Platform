@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { Eye, EyeOff } from "lucide-react";
 
 const RequiredAsterisk = () => <span className="text-destructive">*</span>;
@@ -15,6 +15,8 @@ const RequiredAsterisk = () => <span className="text-destructive">*</span>;
 export default function Register() {
   const register = useRegister();
   const [showPassword, setShowPassword] = useState(false);
+  const search = useSearch();
+  const inviteCommunityId = typeof search === "string" ? new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get("invite") : null;
 
   const form = useForm<RegisterRequest>({
     resolver: zodResolver(registerSchema),
@@ -31,17 +33,23 @@ export default function Register() {
     },
   });
 
+  const onSubmit = (d: RegisterRequest) => {
+    register.mutate(inviteCommunityId ? { ...d, inviteCommunityId } : d);
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 py-12">
       <div className="w-full max-w-3xl">
         <Card className="border-border/50 shadow-xl shadow-black/5">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-center font-bold">Create an account</CardTitle>
-            <CardDescription className="text-center">Enter your details to join your community</CardDescription>
+            <CardDescription className="text-center">
+              {inviteCommunityId ? "You've been invited to join a community. Sign up to get started." : "Enter your details to join your community"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit((d) => register.mutate(d))} className="space-y-8 text-center">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 text-center">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
                   <div className="space-y-4">
                     <FormField
