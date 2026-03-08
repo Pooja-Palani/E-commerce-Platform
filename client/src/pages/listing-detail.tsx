@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import {
     ArrowLeft, Building2, Globe, Tag, Calendar, Package,
     Infinity, ShoppingCart, Phone, Mail,
-    MapPin, Truck, Store, CheckCircle2, Star, FileText, Copy, Clock, Plus, Trash2, Settings2
+    MapPin, Truck, Store, CheckCircle2, Star, FileText, Copy, Clock, Plus, Trash2, Settings2, Bell, AlertTriangle
 } from "lucide-react";
 import { format } from "date-fns";
 import { useState } from "react";
@@ -20,6 +20,15 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function ListingDetail() {
     const { id } = useParams();
@@ -40,6 +49,7 @@ export default function ListingDetail() {
     const [quantity, setQuantity] = useState(1);
     const [stockEdit, setStockEdit] = useState("");
     const [manageStockOpen, setManageStockOpen] = useState(false);
+    const [notifyUsersOpen, setNotifyUsersOpen] = useState(false);
 
     const user = useAuthStore((s) => s.user);
     const viewMode = useAuthStore((s) => s.viewMode);
@@ -242,6 +252,15 @@ export default function ListingDetail() {
                         {/* Seller: Manage Stock (for STOCK products) */}
                         {!isService && isSeller && displayListing?.availabilityBasis === "STOCK" && (
                             <Card className="rounded-[2.5rem] border-amber-200/50 bg-amber-50/30 overflow-hidden">
+                                {isOutOfStock && interestCount > 0 && (
+                                    <Alert className="m-4 mb-0 rounded-xl border-amber-300 bg-amber-100/50">
+                                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                        <AlertTitle className="text-amber-800">Out of stock — users waiting</AlertTitle>
+                                        <AlertDescription className="text-amber-700">
+                                            {interestCount} {interestCount === 1 ? "user wants" : "users want"} this when it&apos;s back. Use &quot;Notify users&quot; to share the link when you restock.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
                                 <CardHeader className="pb-4">
                                     <div className="flex items-center justify-between">
                                         <div>
@@ -256,9 +275,16 @@ export default function ListingDetail() {
                                             </CardDescription>
                                         </div>
                                         {!manageStockOpen && (
-                                            <Button variant="outline" size="sm" onClick={() => { setStockEdit(String(currentStock)); setManageStockOpen(true); }} className="shrink-0">
-                                                Update Stock
-                                            </Button>
+                                            <div className="flex gap-2 shrink-0">
+                                                {isOutOfStock && interestCount > 0 && (
+                                                    <Button variant="default" size="sm" onClick={() => setNotifyUsersOpen(true)} className="gap-1.5">
+                                                        <Bell size={16} /> Notify users
+                                                    </Button>
+                                                )}
+                                                <Button variant="outline" size="sm" onClick={() => { setStockEdit(String(currentStock)); setManageStockOpen(true); }}>
+                                                    Update Stock
+                                                </Button>
+                                            </div>
                                         )}
                                     </div>
                                 </CardHeader>
@@ -620,6 +646,40 @@ export default function ListingDetail() {
                     </div>
                 </div>
             </div>
+
+            <Dialog open={notifyUsersOpen} onOpenChange={setNotifyUsersOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Notify interested users</DialogTitle>
+                        <DialogDescription>
+                            {interestCount} {interestCount === 1 ? "person wants" : "people want"} this when it&apos;s back in stock. Copy the link below and share via WhatsApp or SMS to notify them.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex gap-2">
+                        <Input
+                            readOnly
+                            value={typeof window !== "undefined" ? `${window.location.origin}/listings/${displayListing?.id}` : ""}
+                            className="font-mono text-sm"
+                        />
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={async () => {
+                                const link = typeof window !== "undefined" ? `${window.location.origin}/listings/${displayListing?.id}` : "";
+                                if (link) {
+                                    await navigator.clipboard.writeText(link);
+                                    toast({ title: "Link copied", description: "Share this with interested buyers." });
+                                }
+                            }}
+                        >
+                            <Copy size={16} />
+                        </Button>
+                    </div>
+                    <DialogFooter>
+                        <Button onClick={() => setNotifyUsersOpen(false)}>Done</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Layout>
     );
 }

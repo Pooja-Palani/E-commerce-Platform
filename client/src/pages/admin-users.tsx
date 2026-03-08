@@ -1,11 +1,11 @@
 import { Layout } from "@/components/layout";
-import { useUsers, useUpdateUser, useDeleteUser } from "@/hooks/use-users";
-import { useCommunities } from "@/hooks/use-communities";
+import { useUsers, useUpdateUser, useDeleteUser, useRemoveUserFromCommunities } from "@/hooks/use-users";
+import { useCommunities, useUserCommunities } from "@/hooks/use-communities";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users, Shield, ArrowUpCircle, ArrowDownCircle, Trash2 } from "lucide-react";
+import { Users, ArrowUpCircle, ArrowDownCircle, Trash2, UserMinus, Building2, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import {
@@ -23,18 +23,81 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+
+function RemoveFromCommunitiesForm({
+    userId,
+    selectedIds,
+    onToggle,
+}: {
+    userId: string;
+    selectedIds: Set<string>;
+    onToggle: (id: string) => void;
+}) {
+    const { data: memberships = [] } = useUserCommunities(userId);
+    const active = (memberships as { community: { id: string; name: string }; joinStatus: string }[]).filter(
+        (m) => m.joinStatus === "ACTIVE"
+    );
+    if (!userId || active.length === 0) {
+        return <p className="text-sm text-muted-foreground py-4">User has no community memberships.</p>;
+    }
+    return (
+        <div className="space-y-3 py-4">
+            {active.map((m) => (
+                <div key={m.community.id} className="flex items-center gap-2">
+                    <Checkbox
+                        id={`comm-${m.community.id}`}
+                        checked={selectedIds.has(m.community.id)}
+                        onCheckedChange={() => onToggle(m.community.id)}
+                    />
+                    <Label htmlFor={`comm-${m.community.id}`} className="font-medium cursor-pointer">
+                        {m.community.name}
+                    </Label>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function UserCommunitiesCell({ userId }: { userId: string }) {
+    const { data: memberships = [] } = useUserCommunities(userId);
+    const active = (memberships as { community: { id: string; name: string }; joinStatus: string }[]).filter(
+        (m) => m.joinStatus === "ACTIVE"
+    );
+    if (active.length === 0) return <span className="text-muted-foreground">—</span>;
+    return (
+        <div className="flex flex-wrap gap-1 max-w-[200px]">
+            {active.map((m) => (
+                <Badge key={m.community.id} variant="secondary" className="text-[10px] font-medium">
+                    {m.community.name}
+                </Badge>
+            ))}
+        </div>
+    );
+}
 
 export default function AdminUsers() {
     const { data: users, isLoading } = useUsers();
     const { data: communities } = useCommunities();
     const updateRole = useUpdateUser();
     const deleteUser = useDeleteUser();
+    const removeFromCommunities = useRemoveUserFromCommunities();
     const { toast } = useToast();
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<{ id: string, name: string, version: number } | null>(null);
     const [selectedCommunityId, setSelectedCommunityId] = useState<string>("");
+
+    const [isRemoveFromCommOpen, setIsRemoveFromCommOpen] = useState(false);
+    const [removeFromCommUser, setRemoveFromCommUser] = useState<{ id: string; name: string } | null>(null);
+    const [selectedCommunityIds, setSelectedCommunityIds] = useState<Set<string>>(new Set());
 
     if (isLoading) return <Layout><LoadingSpinner /></Layout>;
 
@@ -83,10 +146,42 @@ export default function AdminUsers() {
         });
     };
 
-    const handleRemoveUser = (userId: string, userName: string) => {
-        if (window.confirm(`Are you sure you want to permanently remove ${userName}? This action cannot be undone.`)) {
+    const handleRemoveFromApp = (userId: string, userName: string) => {
+        if (window.confirm(`Are you sure you want to permanently remove ${userName} from the app? This action cannot be undone.`)) {
             deleteUser.mutate(userId);
         }
+    };
+
+    const handleOpenRemoveFromCommunities = (user: { id: string; fullName: string }) => {
+        setRemoveFromCommUser({ id: user.id, name: user.fullName });
+        setSelectedCommunityIds(new Set());
+        setIsRemoveFromCommOpen(true);
+    };
+
+    const handleRemoveFromCommunitiesConfirm = () => {
+        if (!removeFromCommUser || selectedCommunityIds.size === 0) {
+            toast({ title: "Select at least one community", variant: "destructive" });
+            return;
+        }
+        removeFromCommunities.mutate(
+            { userId: removeFromCommUser.id, communityIds: Array.from(selectedCommunityIds) },
+            {
+                onSuccess: () => {
+                    setIsRemoveFromCommOpen(false);
+                    setRemoveFromCommUser(null);
+                    setSelectedCommunityIds(new Set());
+                }
+            }
+        );
+    };
+
+    const toggleCommunitySelection = (communityId: string) => {
+        setSelectedCommunityIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(communityId)) next.delete(communityId);
+            else next.add(communityId);
+            return next;
+        });
     };
 
     return (
@@ -107,11 +202,12 @@ export default function AdminUsers() {
                     </CardHeader>
                     <CardContent>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left min-w-[1000px]">
+                            <table className="w-full text-sm text-left min-w-[1100px]">
                                 <thead className="bg-[#f8fafc] text-slate-500 uppercase text-[10px] font-bold tracking-wider">
                                     <tr>
                                         <th className="px-6 py-4 font-bold border-b">User Profile</th>
-                                        <th className="px-6 py-4 font-bold border-b">Community Name</th>
+                                        <th className="px-6 py-4 font-bold border-b">Communities</th>
+                                        <th className="px-6 py-4 font-bold border-b">Primary Community</th>
                                         <th className="px-6 py-4 font-bold border-b">Location</th>
                                         <th className="px-6 py-4 font-bold border-b min-w-[220px]">Address</th>
                                         <th className="px-6 py-4 font-bold border-b">Access Level</th>
@@ -126,6 +222,9 @@ export default function AdminUsers() {
                                             <td className="px-6 py-4">
                                                 <div className="font-bold text-slate-900">{user.fullName}</div>
                                                 <div className="text-slate-500 text-xs font-medium">{user.email}</div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <UserCommunitiesCell userId={user.id} />
                                             </td>
                                             <td className="px-6 py-4">
                                                 <p className="text-slate-600 font-medium">{userCommunity?.name ?? "—"}</p>
@@ -177,15 +276,32 @@ export default function AdminUsers() {
                                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest self-center mr-2">System Admin</span>
                                                     )}
 
-                                                    <Button
-                                                        size="sm"
-                                                        variant="destructive"
-                                                        className="bg-rose-500 hover:bg-rose-600 font-bold text-xs h-8 px-3"
-                                                        onClick={() => handleRemoveUser(user.id, user.fullName)}
-                                                        disabled={deleteUser.isPending}
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
-                                                    </Button>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="destructive"
+                                                                className="bg-rose-500 hover:bg-rose-600 font-bold text-xs h-8 px-3"
+                                                                disabled={deleteUser.isPending || removeFromCommunities.isPending}
+                                                            >
+                                                                Remove <ChevronDown className="w-3 h-3 ml-1" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuItem
+                                                                onClick={() => handleOpenRemoveFromCommunities({ id: user.id, fullName: user.fullName })}
+                                                                disabled={user.role === "ADMIN"}
+                                                            >
+                                                                <UserMinus className="w-3.5 h-3.5 mr-2" /> Remove from community
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                onClick={() => handleRemoveFromApp(user.id, user.fullName)}
+                                                                className="text-rose-600 focus:text-rose-600"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5 mr-2" /> Remove from app
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
                                                 </div>
                                             </td>
                                         </tr>
@@ -196,6 +312,32 @@ export default function AdminUsers() {
                     </CardContent>
                 </Card>
             </div>
+
+            <Dialog open={isRemoveFromCommOpen} onOpenChange={setIsRemoveFromCommOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Remove from community</DialogTitle>
+                        <DialogDescription>
+                            Select communities to remove {removeFromCommUser?.name} from.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <RemoveFromCommunitiesForm
+                        userId={removeFromCommUser?.id ?? ""}
+                        selectedIds={selectedCommunityIds}
+                        onToggle={toggleCommunitySelection}
+                    />
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsRemoveFromCommOpen(false)}>Cancel</Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleRemoveFromCommunitiesConfirm}
+                            disabled={selectedCommunityIds.size === 0 || removeFromCommunities.isPending}
+                        >
+                            Remove from selected
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent>

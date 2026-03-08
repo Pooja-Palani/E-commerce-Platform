@@ -275,6 +275,37 @@ export async function registerRoutes(
     }
   });
 
+  app.post(api.communities.leave.path, authMiddleware, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const communityId = req.params.id;
+
+      const community = await storage.getCommunity(communityId);
+      if (!community) return res.status(404).json({ message: "Community not found" });
+
+      const uc = await storage.getUserCommunity(user.id, communityId);
+      if (!uc) return res.status(400).json({ message: "You are not a member of this community" });
+      if (uc.status !== "ACTIVE") return res.status(400).json({ message: "You have already left this community" });
+
+      await storage.updateUserCommunity(uc.id, "REMOVED");
+
+      let newCommunityId: string | null = null;
+      if (user.communityId === communityId) {
+        const userCommunitiesList = await storage.getUserCommunities(user.id);
+        const otherActive = userCommunitiesList.find(
+          (m: any) => m.communityId !== communityId && m.status === "ACTIVE"
+        );
+        newCommunityId = otherActive?.communityId ?? null;
+        await storage.updateUser(user.id, { communityId: newCommunityId, version: user.version });
+      }
+
+      const updatedUser = await storage.getUser(user.id);
+      res.status(200).json(updatedUser);
+    } catch (err) {
+      res.status(500).json({ message: "Error leaving community" });
+    }
+  });
+
   app.post(api.communities.join.path, authMiddleware, async (req: any, res) => {
     try {
       const user = req.user;
@@ -404,27 +435,27 @@ export async function registerRoutes(
     }
   });
 
-  // Community invite: for existing users - sends invite they can accept in-app
+  // Community invite: for existing users - sends invite they can accept in-app (by phone)
   app.post("/api/communities/:id/invite", authMiddleware, async (req: any, res) => {
     try {
       const currentUser = req.user;
       const communityId = req.params.id;
       const canManage = currentUser.role === "ADMIN" || (currentUser.role === "COMMUNITY_MANAGER" && currentUser.communityId === communityId);
       if (!canManage) return res.status(403).json({ message: "Forbidden" });
-      const { email } = req.body as { email: string };
-      if (!email || typeof email !== "string") return res.status(400).json({ message: "email is required" });
-      const inviteeEmail = email.trim().toLowerCase();
+      const { phone } = req.body as { phone?: string };
+      if (!phone || typeof phone !== "string") return res.status(400).json({ message: "Phone number is required" });
+      const inviteePhone = phone.trim();
       const community = await storage.getCommunity(communityId);
       if (!community) return res.status(404).json({ message: "Community not found" });
-      const existingUser = await storage.getUserByEmail(inviteeEmail);
+      const existingUser = await storage.getUserByPhone(inviteePhone);
       if (existingUser) {
         const uc = await storage.getUserCommunity(existingUser.id, communityId);
         if (uc?.status === "ACTIVE") return res.status(400).json({ message: "User is already in this community" });
-        const existingInvite = (await storage.getPendingInvitesByEmail(inviteeEmail)).find(i => i.communityId === communityId);
-        if (existingInvite) return res.status(400).json({ message: "Invite already sent to this email" });
+        const existingByPhone = (await storage.getPendingInvitesByPhone(inviteePhone)).find(i => i.communityId === communityId);
+        if (existingByPhone) return res.status(400).json({ message: "Invite already sent to this phone number" });
         await storage.createCommunityInvite({
           communityId,
-          inviteeEmail,
+          inviteeEmail: inviteePhone,
           inviteeId: existingUser.id,
           invitedById: currentUser.id,
           status: "PENDING",
@@ -468,7 +499,13 @@ export async function registerRoutes(
       const invite = await storage.getCommunityInvite(req.params.id);
       if (!invite) return res.status(404).json({ message: "Invite not found" });
       if (invite.status !== "PENDING") return res.status(400).json({ message: "Invite is no longer valid" });
-      if (invite.inviteeEmail !== req.user.email?.toLowerCase()) return res.status(403).json({ message: "This invite was sent to a different email" });
+      const matchEmail = req.user.email && invite.inviteeEmail.toLowerCase() === req.user.email.toLowerCase();
+      const matchPhone = req.user.phone && (() => {
+        const a = String(invite.inviteeEmail).replace(/\D/g, "").slice(-10);
+        const b = String(req.user.phone).replace(/\D/g, "").slice(-10);
+        return a && b && a === b;
+      })();
+      if (!matchEmail && !matchPhone) return res.status(403).json({ message: "This invite was sent to a different phone number or email" });
       const uc = await storage.getUserCommunity(req.user.id, invite.communityId);
       if (uc?.status === "ACTIVE") {
         await storage.updateCommunityInvite(invite.id, "REJECTED");
@@ -490,7 +527,13 @@ export async function registerRoutes(
       const invite = await storage.getCommunityInvite(req.params.id);
       if (!invite) return res.status(404).json({ message: "Invite not found" });
       if (invite.status !== "PENDING") return res.status(400).json({ message: "Invite is no longer valid" });
-      if (invite.inviteeEmail !== req.user.email?.toLowerCase()) return res.status(403).json({ message: "Forbidden" });
+      const matchEmail = req.user.email && invite.inviteeEmail.toLowerCase() === req.user.email.toLowerCase();
+      const matchPhone = req.user.phone && (() => {
+        const a = String(invite.inviteeEmail).replace(/\D/g, "").slice(-10);
+        const b = String(req.user.phone).replace(/\D/g, "").slice(-10);
+        return a && b && a === b;
+      })();
+      if (!matchEmail && !matchPhone) return res.status(403).json({ message: "Forbidden" });
       await storage.updateCommunityInvite(invite.id, "REJECTED");
       res.status(200).json({ message: "Invite declined" });
     } catch (err) {
@@ -819,6 +862,44 @@ export async function registerRoutes(
       res.status(200).json(user);
     } catch (err) {
       res.status(400).json({ message: "Error" });
+    }
+  });
+
+  app.post('/api/admin/users/:id/remove-from-communities', authMiddleware, async (req: any, res) => {
+    try {
+      if (req.user.role !== "ADMIN") {
+        return res.status(403).json({ message: "Only administrators can remove users from communities" });
+      }
+      const userId = req.params.id;
+      const { communityIds } = req.body as { communityIds?: string[] };
+      if (!Array.isArray(communityIds) || communityIds.length === 0) {
+        return res.status(400).json({ message: "Provide at least one community ID" });
+      }
+
+      const targetUser = await storage.getUser(userId);
+      if (!targetUser) return res.status(404).json({ message: "User not found" });
+
+      for (const communityId of communityIds) {
+        const uc = await storage.getUserCommunity(userId, communityId);
+        if (uc && uc.status === "ACTIVE") {
+          await storage.updateUserCommunity(uc.id, "REMOVED");
+        }
+      }
+
+      let newCommunityId: string | null = targetUser.communityId;
+      if (communityIds.includes(targetUser.communityId || "")) {
+        const userCommunitiesList = await storage.getUserCommunities(userId);
+        const otherActive = userCommunitiesList.find(
+          (m: any) => m.communityId !== targetUser.communityId && m.status === "ACTIVE"
+        );
+        newCommunityId = otherActive?.communityId ?? null;
+        await storage.updateUser(userId, { communityId: newCommunityId, version: targetUser.version });
+      }
+
+      const updatedUser = await storage.getUser(userId);
+      res.status(200).json(updatedUser);
+    } catch (err) {
+      res.status(500).json({ message: "Error removing user from communities" });
     }
   });
 
@@ -1166,29 +1247,63 @@ export async function registerRoutes(
     }
   });
 
+  app.post(api.reports.create.path, authMiddleware, async (req: any, res) => {
+    try {
+      const input = api.reports.create.input.parse(req.body);
+      const listing = await storage.getListing(input.listingId);
+      if (!listing) return res.status(404).json({ message: "Listing not found" });
+      if (listing.sellerId === req.user.id) return res.status(400).json({ message: "You cannot report your own listing" });
+      if (listing.communityId !== req.user.communityId) return res.status(403).json({ message: "You can only report listings in your community" });
+
+      const report = await storage.createReport({
+        listingId: input.listingId,
+        reporterId: req.user.id,
+        communityId: listing.communityId,
+        reason: input.reason,
+        details: input.details || null,
+        bookingId: input.bookingId || null,
+      });
+      res.status(201).json(report);
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
+    }
+  });
+
+  app.get(api.manager.reports.path, authMiddleware, async (req: any, res) => {
+    if (req.user.role !== "COMMUNITY_MANAGER") return res.status(403).json({ message: "Forbidden" });
+    const communityId = req.user.communityId;
+    if (!communityId) return res.status(400).json({ message: "No community assigned" });
+    const reports = await storage.getReportsByCommunity(communityId);
+    const serialized = reports.map(r => ({
+      ...r,
+      createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+    }));
+    res.status(200).json(serialized);
+  });
+
   app.get(api.manager.analytics.path, authMiddleware, async (req: any, res) => {
     if (req.user.role !== "COMMUNITY_MANAGER") return res.status(403).json({ message: "Forbidden" });
     const communityId = req.user.communityId;
     if (!communityId) return res.status(400).json({ message: "No community assigned" });
 
-    const [users, listings, bookings, orders] = await Promise.all([
+    const [usersList, listings, bookings, orders, communityReports] = await Promise.all([
       storage.getUsers(),
       storage.getListings(),
       storage.getBookings(),
-      storage.getOrders()
+      storage.getOrders(),
+      storage.getReportsByCommunity(communityId),
     ]);
 
-    const communityUsers = users.filter(u => u.communityId === communityId);
+    const communityUsers = usersList.filter((u: any) => u.communityId === communityId);
     const pendingApprovals = communityUsers.filter(u => u.status === 'PENDING').length;
 
     const communityListings = listings.filter(l => l.communityId === communityId);
     const activeSellers = new Set(communityListings.map(l => l.sellerId)).size;
     const totalListings = communityListings.length;
 
-    // We don't have reported listings or low-rated services in schema right now, so dummy data
-    const reportedListings = 0;
+    const reportedListings = communityReports.filter((r: any) => !r.bookingId).length;
+    const disputedBookings = communityReports.filter((r: any) => r.bookingId).length;
     const lowRatedServices = 0;
-    const disputedBookings = 0;
 
     const communityBookings = bookings.filter(b => communityListings.some(l => l.id === b.listingId));
     const communityOrders = orders.filter(o => communityListings.some(l => l.id === o.listingId));

@@ -21,6 +21,7 @@ import {
   ChevronRight,
   ChevronDown,
   Receipt,
+  UserRound,
 } from "lucide-react";
 import {
   Sidebar,
@@ -47,6 +48,8 @@ export function AppSidebar() {
   const user = useAuthStore((state) => state.user);
   const viewMode = useAuthStore((state) => state.viewMode);
   const setViewMode = useAuthStore((state) => state.setViewMode);
+  const useAsUser = useAuthStore((state) => state.useAsUser);
+  const setUseAsUser = useAuthStore((state) => state.setUseAsUser);
   const logout = useLogout();
   const [location] = useLocation();
   const { data: settings } = useAdminSettings();
@@ -67,15 +70,18 @@ export function AppSidebar() {
 
   if (!user) return null;
 
+  const isAdminOrManager = user.role === "ADMIN" || user.role === "COMMUNITY_MANAGER";
+  const showResidentNav = user.role === "RESIDENT" || (isAdminOrManager && useAsUser);
+
   const navigationItems = [
     { title: "Dashboard", url: "/", icon: LayoutDashboard },
     { title: "Community Chat", url: "/forum", icon: MessageSquare },
     ...(viewMode === "BUYER" ? [{ title: "My Activity", url: "/activity", icon: Calendar }] : []),
-    ...(user.role === "RESIDENT" ? [
+    ...(showResidentNav ? [
       { title: "Cart", url: "/cart", icon: ShoppingCart },
       { title: "Orders", url: "/orders", icon: Receipt },
     ] : []),
-    ...(user.role === "RESIDENT" && viewMode === "BUYER" ? [] : [
+    ...(showResidentNav && viewMode === "BUYER" ? [] : [
       { title: "My Services", url: "/my-services", icon: Wrench },
       { title: "My Products", url: "/my-products", icon: Package },
       { title: "Accept Payments", url: "/accept-payments", icon: Wallet },
@@ -85,6 +91,7 @@ export function AppSidebar() {
   const marketplaceItems = [
     { title: "Services", url: "/services", icon: Wrench },
     { title: "Products", url: "/products", icon: ShoppingBag },
+    { title: "Subcommunities", url: "/subcommunities", icon: Building2 },
   ];
 
   const managerItems = [
@@ -111,7 +118,12 @@ export function AppSidebar() {
             </div>
           </div>
           <div className="mt-6 p-3 bg-primary/5 rounded-lg border border-primary/10">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Community</p>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Community</p>
+              {showResidentNav && (
+                <Link href="/profile" className="text-[10px] font-bold text-primary hover:underline">Add community</Link>
+              )}
+            </div>
             {userCommunitiesList.length > 0 ? (
                 <Select
                   value={currentCommunityId || (userCommunitiesList[0]?.id ?? "")}
@@ -140,7 +152,7 @@ export function AppSidebar() {
             )}
           </div>
 
-          {user.role === "RESIDENT" && (
+          {showResidentNav && (
             <div className="mt-6 px-3 py-4 bg-muted/30 rounded-xl border border-border/50 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">View Mode</span>
@@ -177,9 +189,39 @@ export function AppSidebar() {
               </p>
             </div>
           )}
+
+          {isAdminOrManager && (
+            <div className="mt-6 px-3 py-4 bg-muted/30 rounded-xl border border-border/50 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">Role Mode</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${useAsUser ? 'bg-blue-500/10 text-blue-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                  {useAsUser ? "User view" : user.role === "ADMIN" ? "Admin" : "Manager"}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 bg-background/50 p-2 rounded-lg border border-border/50">
+                <div className={`p-1.5 rounded-md ${useAsUser ? 'bg-blue-500 text-white shadow-blue-500/20' : 'bg-muted text-muted-foreground'} transition-all shadow-sm`}>
+                  <UserRound size={14} />
+                </div>
+                <div className="flex-1">
+                  <Switch
+                    id="use-as-user"
+                    checked={useAsUser}
+                    onCheckedChange={setUseAsUser}
+                    className="data-[state=checked]:bg-blue-500"
+                  />
+                </div>
+                <div className={`p-1.5 rounded-md ${!useAsUser ? 'bg-amber-500 text-white shadow-amber-500/20' : 'bg-muted text-muted-foreground'} transition-all shadow-sm`}>
+                  <Shield size={14} />
+                </div>
+              </div>
+              <p className="mt-2 text-[10px] text-center text-muted-foreground/60 italic font-medium">
+                {useAsUser ? "Using platform as a regular user" : `Back to ${user.role === "ADMIN" ? "Admin" : "Manager"} panel`}
+              </p>
+            </div>
+          )}
         </div>
 
-        {user.role === "ADMIN" ? (
+        {user.role === "ADMIN" && !useAsUser ? (
           <SidebarGroup>
             <SidebarGroupLabel className="px-6 text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mb-2">Platform Admin</SidebarGroupLabel>
             <SidebarGroupContent className="px-2">
@@ -203,7 +245,7 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        ) : user.role === "COMMUNITY_MANAGER" ? (
+        ) : user.role === "COMMUNITY_MANAGER" && !useAsUser ? (
           <>
           <SidebarGroup>
             <SidebarGroupLabel className="px-6 text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mb-2">Navigation</SidebarGroupLabel>
@@ -291,13 +333,21 @@ export function AppSidebar() {
               </SidebarGroupContent>
             </SidebarGroup>
 
-            {/* Sub-communities if any */}
-            {user.communityId && communities?.some(c => c.parentId === user.communityId) && (
+            {/* Sub-communities: only those user is a member of */}
+            {user.communityId && (() => {
+              const subsOfParent = communities?.filter(c => c.parentId === user.communityId) ?? [];
+              const memberSubIds = new Set(
+                (userCommunitiesData ?? [])
+                  .filter((m: { joinStatus: string; community: { id: string } }) => m.joinStatus === "ACTIVE" && m.community?.id)
+                  .map((m: { community: { id: string } }) => m.community.id)
+              );
+              const visibleSubs = subsOfParent.filter(sub => memberSubIds.has(sub.id));
+              return visibleSubs.length > 0 && (
               <SidebarGroup>
                 <SidebarGroupLabel className="px-6 text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 mt-4">Sub-Communities</SidebarGroupLabel>
                 <SidebarGroupContent className="px-2">
                   <SidebarMenu>
-                    {communities.filter(c => c.parentId === user.communityId).map((sub) => (
+                    {visibleSubs.map((sub) => (
                       <SidebarMenuItem key={sub.id}>
                         <SidebarMenuButton asChild className="px-4 py-2 hover:bg-primary/5 transition-colors group">
                           <Link href={`/communities/${sub.id}`} className="flex items-center gap-3 w-full">
@@ -310,7 +360,8 @@ export function AppSidebar() {
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
-            )}
+            );
+            })()}
           </>
         )}
       </SidebarContent>

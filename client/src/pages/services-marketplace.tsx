@@ -11,6 +11,7 @@ import { useAdminSettings } from "@/hooks/use-admin";
 import { useAuthStore } from "@/store/use-auth";
 import { useCartStore } from "@/store/use-cart";
 import { useToast } from "@/hooks/use-toast";
+import { ReportListingDialog } from "@/components/report-listing-dialog";
 
 function tomorrow() {
     const d = new Date();
@@ -114,9 +115,18 @@ export default function ServicesMarketplace() {
                                 </Link>
                                 <div className="px-6 pb-6 pt-0 -mt-2">
                                     <div className="flex items-center justify-between pt-4 border-t border-border/40">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Starts from</span>
-                                            <span className="text-xl font-bold text-primary">₹{service.price}</span>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Starts from</span>
+                                                <span className="text-xl font-bold text-primary">₹{service.price}</span>
+                                            </div>
+                                            {service.sellerId !== user.id && (
+                                                <ReportListingDialog
+                                                    listingId={service.id}
+                                                    listingTitle={service.title}
+                                                    trigger={<Button variant="ghost" size="sm" className="h-auto py-1 px-2 text-xs text-muted-foreground hover:text-destructive">Report</Button>}
+                                                />
+                                            )}
                                         </div>
                                         <Button
                                             size="sm"

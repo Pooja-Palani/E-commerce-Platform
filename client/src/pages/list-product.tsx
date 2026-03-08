@@ -39,12 +39,16 @@ export default function ListProduct() {
 
     const communities = (userCommunities ?? [])
         .filter((m: { joinStatus: string }) => m.joinStatus === "ACTIVE")
-        .map((m: { community: { id: string; name: string } }) => m.community);
+        .map((m: { community: { id: string; name: string; parentId?: string | null } }) => m.community);
+
+    const selectedCommunity = communities.find((c: any) => c.id === form.watch("communityId"));
+    const isSubCommunity = selectedCommunity?.parentId;
 
     const form = useForm({
         resolver: zodResolver(insertListingSchema.extend({
             listingType: z.literal("PRODUCT"),
             communityId: z.string().min(1, "Community is required"),
+            listToEntireCommunity: z.boolean().optional(),
             availabilityBasis: z.enum(["FOREVER", "TIMELINE", "STOCK"]).optional(),
             startDate: z.any().optional(),
             endDate: z.any().optional(),
@@ -62,6 +66,7 @@ export default function ListProduct() {
             price: 0,
             listingType: "PRODUCT",
             communityId: user?.communityId || "",
+            listToEntireCommunity: false,
             sellerId: user?.id ?? "",
             availabilityBasis: "FOREVER",
             startDate: "",
@@ -145,6 +150,11 @@ export default function ListProduct() {
 
     const handleSubmit = (data: any) => {
         const payload: any = { ...data, sellerId: user!.id };
+        const sel = communities.find((c: any) => c.id === data.communityId);
+        if (data.listToEntireCommunity && sel?.parentId) {
+            payload.communityId = sel.parentId;
+        }
+        delete payload.listToEntireCommunity;
         if (!payload.buyNowEnabled) {
             payload.price = 0;
         }
@@ -280,11 +290,30 @@ export default function ListProduct() {
                                                 <SelectValue placeholder="Select community" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {communities.map((c: { id: string; name: string }) => (
-                                                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                                {communities.map((c: { id: string; name: string; parentId?: string | null }) => (
+                                                    <SelectItem key={c.id} value={c.id}>
+                                                        {c.parentId ? `${c.name} (sub-community)` : c.name}
+                                                    </SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
+                                        {isSubCommunity && (
+                                            <div className="flex items-center justify-between rounded-xl border border-border/50 p-4 bg-muted/5 gap-4">
+                                                <div>
+                                                    <Label className="font-bold text-sm">List to</Label>
+                                                    <p className="text-xs text-muted-foreground">Entire parent community or just this sub-community?</p>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <Switch
+                                                        checked={form.watch("listToEntireCommunity" as any)}
+                                                        onCheckedChange={(v) => form.setValue("listToEntireCommunity" as any, v)}
+                                                    />
+                                                    <span className="text-xs font-medium">
+                                                        {form.watch("listToEntireCommunity" as any) ? "Entire community" : "Sub only"}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
                                         {form.formState.errors.communityId && (
                                             <p className="text-xs text-destructive font-medium">{form.formState.errors.communityId.message}</p>
                                         )}

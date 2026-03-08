@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, communities, listings, listingSlots, auditLogs, bookings, orders, productInterests,
+  users, communities, listings, listingSlots, auditLogs, bookings, orders, productInterests, reports,
   type User, type InsertUser, type UpdateUserRequest,
   type Community, type InsertCommunity, type UpdateCommunityRequest,
   type Listing, type InsertListing, type UpdateListingRequest,
@@ -10,7 +10,8 @@ import {
   userCommunities, type UserCommunity, type InsertUserCommunity,
   communityInvites, type CommunityInvite, type InsertCommunityInvite,
   posts, type Post, type InsertPost,
-  comments, type Comment, type InsertComment
+  comments, type Comment, type InsertComment,
+  type Report, type InsertReport
 } from "@shared/schema";
 import { eq, and, or, inArray } from "drizzle-orm";
 
@@ -51,6 +52,10 @@ export interface IStorage {
   createListing(listing: InsertListing): Promise<Listing>;
   updateListing(id: string, updates: UpdateListingRequest): Promise<Listing | undefined>;
   updateListingStock(id: string, stockQuantity: number): Promise<Listing | undefined>;
+
+  // Reports
+  createReport(report: InsertReport): Promise<Report>;
+  getReportsByCommunity(communityId: string): Promise<(Report & { listingTitle?: string; reporterName?: string; sellerName?: string })[]>;
 
   // Product Interests (when stock is 0)
   createProductInterest(listingId: string, userId: string): Promise<{ id: string; listingId: string; userId: string; createdAt: Date }>;
@@ -228,10 +233,34 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async getPendingInvitesByPhone(phone: string): Promise<(CommunityInvite & { community?: Community })[]> {
+    const normalized = String(phone).trim().replace(/\D/g, "").slice(-10);
+    if (!normalized) return [];
+    const rows = await db.select().from(communityInvites)
+      .where(and(eq(communityInvites.status, "PENDING")));
+    const filtered = rows.filter((r) => {
+      const stored = String(r.inviteeEmail).replace(/\D/g, "").slice(-10);
+      return stored && stored === normalized;
+    });
+    const result: (CommunityInvite & { community?: Community })[] = [];
+    for (const r of filtered) {
+      const [comm] = await db.select().from(communities).where(eq(communities.id, r.communityId));
+      result.push({ ...r, community: comm });
+    }
+    return result;
+  }
+
   async getPendingInvitesByUserId(userId: string): Promise<(CommunityInvite & { community?: Community })[]> {
     const user = await this.getUser(userId);
-    if (!user?.email) return [];
-    return this.getPendingInvitesByEmail(user.email);
+    if (!user) return [];
+    const byEmail = user.email ? await this.getPendingInvitesByEmail(user.email) : [];
+    const byPhone = user.phone ? await this.getPendingInvitesByPhone(user.phone) : [];
+    const seen = new Set<string>();
+    const merged: (CommunityInvite & { community?: Community })[] = [];
+    for (const inv of [...byEmail, ...byPhone]) {
+      if (!seen.has(inv.id)) { seen.add(inv.id); merged.push(inv); }
+    }
+    return merged;
   }
 
   async updateCommunityInvite(id: string, status: "PENDING" | "ACCEPTED" | "REJECTED", inviteeId?: string): Promise<CommunityInvite | undefined> {
@@ -301,6 +330,30 @@ export class DatabaseStorage implements IStorage {
       and(eq(productInterests.listingId, listingId), eq(productInterests.userId, userId))
     );
     return rows.length > 0;
+  }
+
+  // Reports
+  async createReport(report: InsertReport): Promise<Report> {
+    const [r] = await db.insert(reports).values(report).returning();
+    return r;
+  }
+
+  async getReportsByCommunity(communityId: string): Promise<(Report & { listingTitle?: string; reporterName?: string; sellerName?: string })[]> {
+    const rows = await db.select().from(reports).where(eq(reports.communityId, communityId));
+    const listingIds = [...new Set(rows.map(r => r.listingId))];
+    const userIds = [...new Set(rows.map(r => r.reporterId))];
+    const listingsArr = listingIds.length ? await db.select().from(listings).where(inArray(listings.id, listingIds)) : [];
+    const usersArr = userIds.length ? await db.select().from(users).where(inArray(users.id, userIds)) : [];
+    const listingsMap: Record<string, any> = {};
+    listingsArr.forEach(l => { listingsMap[l.id] = l; });
+    const usersMap: Record<string, any> = {};
+    usersArr.forEach(u => { usersMap[u.id] = u.fullName; });
+    return rows.map(r => ({
+      ...r,
+      listingTitle: listingsMap[r.listingId]?.title,
+      reporterName: usersMap[r.reporterId],
+      sellerName: listingsMap[r.listingId]?.sellerNameSnapshot,
+    }));
   }
 
   // Bookings

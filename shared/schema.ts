@@ -18,6 +18,14 @@ export const orderStatusEnum = pgEnum("order_status", ["PENDING", "QUOTATION_PRO
 export const availabilityBasisEnum = pgEnum("availability_basis", ["FOREVER", "TIMELINE", "STOCK"]);
 export const paymentPreferenceEnum = pgEnum("payment_preference", ["IN_APP", "DIRECT"]);
 export const logisticsPreferenceEnum = pgEnum("logistics_preference", ["PICKUP", "DELIVERY_SUPPORT"]);
+export const reportReasonEnum = pgEnum("report_reason", [
+  "INAPPROPRIATE_CONTENT",
+  "MISLEADING_DESCRIPTION",
+  "FAKE_OR_SPAM",
+  "QUALITY_ISSUE",
+  "SCAM_OR_FRAUD",
+  "OTHER"
+]);
 
 export const communities = pgTable("communities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -157,6 +165,17 @@ export const productInterests = pgTable("product_interests", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const reports = pgTable("reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  listingId: varchar("listing_id").notNull(),
+  reporterId: varchar("reporter_id").notNull(),
+  communityId: varchar("community_id").notNull(),
+  reason: reportReasonEnum("reason").notNull(),
+  details: text("details"),
+  bookingId: varchar("booking_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const auditLogs = pgTable("audit_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   actorId: varchar("actor_id"),
@@ -221,6 +240,7 @@ export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, cre
 export const insertPlatformSettingsSchema = createInsertSchema(platformSettings).omit({ id: true, updatedAt: true });
 export const insertPostSchema = createInsertSchema(posts).omit({ id: true, createdAt: true });
 export const insertCommentSchema = createInsertSchema(comments).omit({ id: true, createdAt: true });
+export const insertReportSchema = createInsertSchema(reports).omit({ id: true, createdAt: true });
 
 export type Community = typeof communities.$inferSelect;
 export type InsertCommunity = z.infer<typeof insertCommunitySchema>;
@@ -259,6 +279,9 @@ export type InsertPost = z.infer<typeof insertPostSchema>;
 
 export type Comment = typeof comments.$inferSelect;
 export type InsertComment = z.infer<typeof insertCommentSchema>;
+
+export type Report = typeof reports.$inferSelect;
+export type InsertReport = z.infer<typeof insertReportSchema>;
 
 export const loginSchema = z.object({
   email: z.string().email().transform((s) => s.trim().toLowerCase()),

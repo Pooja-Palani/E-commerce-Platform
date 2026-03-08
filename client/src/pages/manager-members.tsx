@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Layout } from "@/components/layout";
-import { useCommunityMembers, useRemoveMemberFromCommunity, useInviteByEmail, useInviteLink } from "@/hooks/use-communities";
+import { useCommunityMembers, useRemoveMemberFromCommunity, useInviteByPhone, useInviteLink } from "@/hooks/use-communities";
 import { useUsers } from "@/hooks/use-users";
 import { useAuthStore } from "@/store/use-auth";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -24,12 +24,12 @@ export default function ManagerMembers() {
   const { data: members, isLoading } = useCommunityMembers(communityId);
   const { data: allUsers } = useUsers();
   const removeMember = useRemoveMemberFromCommunity(communityId);
-  const inviteByEmail = useInviteByEmail(communityId);
+  const inviteByPhone = useInviteByPhone(communityId);
   const { data: inviteLinkData, refetch: refetchInviteLink } = useInviteLink(communityId);
   const { toast } = useToast();
 
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
+  const [invitePhone, setInvitePhone] = useState("");
   const [inviteLinkDialogOpen, setInviteLinkDialogOpen] = useState(false);
 
   const communityMembers = (members && members.length > 0)
@@ -50,10 +50,10 @@ export default function ManagerMembers() {
     }
   };
 
-  const handleInviteByEmail = async () => {
-    if (!inviteEmail.trim()) return;
-    await inviteByEmail.mutateAsync(inviteEmail.trim());
-    setInviteEmail("");
+  const handleInviteByPhone = async () => {
+    if (!invitePhone.trim()) return;
+    await inviteByPhone.mutateAsync(invitePhone.trim());
+    setInvitePhone("");
     setInviteDialogOpen(false);
   };
 
@@ -65,13 +65,13 @@ export default function ManagerMembers() {
       <div className="space-y-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Community Members</h1>
-          <p className="text-muted-foreground mt-1 text-sm font-medium">View and manage all active residents in your community. Invite by email or share the app link.</p>
+          <p className="text-muted-foreground mt-1 text-sm font-medium">View and manage all active residents in your community. Invite by phone number or share the app link.</p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => setInviteDialogOpen(true)} className="gap-2">
             <UserPlus className="w-4 h-4" />
-            Invite by email
+            Invite by phone
           </Button>
           <Button variant="outline" onClick={() => { setInviteLinkDialogOpen(true); refetchInviteLink(); }} className="gap-2">
             <Link2 className="w-4 h-4" />
@@ -96,6 +96,7 @@ export default function ManagerMembers() {
                   <thead className="bg-slate-50 text-slate-500">
                     <tr>
                       <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px]">Name</th>
+                      <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px]">Phone</th>
                       <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px]">Email</th>
                       <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px]">Role</th>
                       <th className="px-6 py-4 font-bold uppercase tracking-wider text-[10px]">Joined</th>
@@ -111,6 +112,7 @@ export default function ManagerMembers() {
                             <Shield className="w-4 h-4 text-indigo-500" />
                           )}
                         </td>
+                        <td className="px-6 py-4 text-slate-600 font-medium">{user.phone || "—"}</td>
                         <td className="px-6 py-4 text-slate-500 font-medium">{user.email}</td>
                         <td className="px-6 py-4">
                           <Badge variant="outline" className={`font-bold text-[10px] tracking-wider uppercase ${user.role === 'COMMUNITY_MANAGER' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
@@ -144,21 +146,21 @@ export default function ManagerMembers() {
       <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Invite by email</DialogTitle>
+            <DialogTitle>Invite by phone</DialogTitle>
             <DialogDescription>
-              If the user is already on the app, they'll get a notification to accept. If not, use the invite link instead.
+              Enter the user&apos;s phone number. If they&apos;re on the app, they&apos;ll see the invite in their profile. If not, use the invite link.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <Input
-              placeholder="email@example.com"
-              type="email"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="e.g. 9876543210"
+              type="tel"
+              value={invitePhone}
+              onChange={(e) => setInvitePhone(e.target.value)}
             />
             <div className="flex gap-2">
-              <Button onClick={handleInviteByEmail} disabled={!inviteEmail.trim() || inviteByEmail.isPending}>
-                {inviteByEmail.isPending ? "Sending..." : "Send invite"}
+              <Button onClick={handleInviteByPhone} disabled={!invitePhone.trim() || inviteByPhone.isPending}>
+                {inviteByPhone.isPending ? "Sending..." : "Send invite"}
               </Button>
               <Button variant="outline" onClick={() => setInviteDialogOpen(false)}>Cancel</Button>
             </div>

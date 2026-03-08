@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  users, communities, listings, auditLogs, bookings, orders, platformSettings,
+  users, communities, listings, auditLogs, bookings, orders, platformSettings, reports,
   insertUserSchema, insertCommunitySchema, insertListingSchema, insertPlatformSettingsSchema,
   loginSchema, registerSchema, posts, comments
 } from './schema';
@@ -104,6 +104,16 @@ export const api = {
       path: '/api/communities/:id/join' as const,
       responses: {
         200: z.custom<typeof users.$inferSelect>(),
+        404: errorSchemas.notFound,
+      }
+    },
+    leave: {
+      method: 'POST' as const,
+      path: '/api/communities/:id/leave' as const,
+      responses: {
+        200: z.custom<typeof users.$inferSelect>(),
+        400: errorSchemas.validation,
+        403: errorSchemas.forbidden,
         404: errorSchemas.notFound,
       }
     },
@@ -415,7 +425,43 @@ export const api = {
       },
     },
   },
+  reports: {
+    create: {
+      method: 'POST' as const,
+      path: '/api/reports' as const,
+      input: z.object({
+        listingId: z.string(),
+        reason: z.enum(['INAPPROPRIATE_CONTENT', 'MISLEADING_DESCRIPTION', 'FAKE_OR_SPAM', 'QUALITY_ISSUE', 'SCAM_OR_FRAUD', 'OTHER']),
+        details: z.string().optional().nullable(),
+        bookingId: z.string().optional().nullable(),
+      }),
+      responses: {
+        201: z.custom<typeof reports.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
+  },
   manager: {
+    reports: {
+      method: 'GET' as const,
+      path: '/api/manager/reports' as const,
+      responses: {
+        200: z.array(z.object({
+          id: z.string(),
+          listingId: z.string(),
+          reporterId: z.string(),
+          communityId: z.string(),
+          reason: z.string(),
+          details: z.string().nullable(),
+          bookingId: z.string().nullable(),
+          createdAt: z.string(),
+          listingTitle: z.string().optional(),
+          reporterName: z.string().optional(),
+          sellerName: z.string().optional(),
+        })),
+        403: errorSchemas.forbidden,
+      },
+    },
     analytics: {
       method: 'GET' as const,
       path: '/api/manager/analytics' as const,

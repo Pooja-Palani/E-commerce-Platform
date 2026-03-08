@@ -37,6 +37,7 @@ import Cart from "./pages/cart";
 import ServicesMarketplace from "./pages/services-marketplace";
 import ProductsMarketplace from "./pages/products-marketplace";
 import Profile from "./pages/profile";
+import Subcommunities from "./pages/subcommunities";
 import Forum from "./pages/forum";
 import PostDetail from "./pages/post-detail";
 import ListingDetail from "./pages/listing-detail";
@@ -86,6 +87,7 @@ function Router() {
       <ProtectedRoute path="/services" component={ServicesMarketplace} />
       <ProtectedRoute path="/products" component={ProductsMarketplace} />
       <ProtectedRoute path="/profile" component={Profile} />
+      <ProtectedRoute path="/subcommunities" component={Subcommunities} />
       <ProtectedRoute path="/accept-payments" component={AcceptPayments} />
       <ProtectedRoute path="/forum" component={Forum} />
       <ProtectedRoute path="/forum/post/:id" component={PostDetail} />

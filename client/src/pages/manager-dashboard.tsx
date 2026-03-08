@@ -1,8 +1,23 @@
+import { useState } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   ShieldCheck,
   AlertTriangle,
@@ -14,11 +29,40 @@ import {
   TrendingUp,
   DollarSign,
   Percent,
-  ArrowUpRight
+  ArrowUpRight,
+  Eye,
 } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
+import { Link } from "wouter";
+
+const REASON_LABELS: Record<string, string> = {
+  INAPPROPRIATE_CONTENT: "Inappropriate content",
+  MISLEADING_DESCRIPTION: "Misleading description",
+  FAKE_OR_SPAM: "Fake or spam",
+  QUALITY_ISSUE: "Quality issue",
+  SCAM_OR_FRAUD: "Scam or fraud",
+  OTHER: "Other",
+};
+
+type ReportRow = {
+  id: string;
+  listingId: string;
+  reporterId: string;
+  reason: string;
+  details: string | null;
+  bookingId: string | null;
+  createdAt: string;
+  listingTitle?: string;
+  reporterName?: string;
+  sellerName?: string;
+};
 
 export default function ManagerDashboard() {
+  const [selectedReport, setSelectedReport] = useState<ReportRow | null>(null);
+
   const { data: analytics, isLoading } = useQuery({
     queryKey: [api.manager.analytics.path],
     queryFn: async () => {
@@ -29,6 +73,19 @@ export default function ManagerDashboard() {
     },
     refetchInterval: 2000,
   });
+
+  const { data: reports = [], isLoading: loadingReports } = useQuery<ReportRow[]>({
+    queryKey: [api.manager.reports.path],
+    queryFn: async () => {
+      const res = await fetch(api.manager.reports.path, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch reports");
+      return res.json();
+    },
+    refetchInterval: 2000,
+  });
+
+  const reportedListings = reports.filter((r) => !r.bookingId);
+  const disputedBookings = reports.filter((r) => r.bookingId);
 
   if (isLoading) return <Layout><LoadingSpinner /></Layout>;
 
@@ -94,6 +151,138 @@ export default function ManagerDashboard() {
             </Card>
           </div>
         </div>
+
+        {/* Reported Listings & Disputed Bookings */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="border-amber-200/50 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+                Reported Listings
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">Listings reported by community members</p>
+            </CardHeader>
+            <CardContent>
+              {loadingReports ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">Loading...</p>
+              ) : reportedListings.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">No reported listings</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Listing</TableHead>
+                      <TableHead>Reporter</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead className="w-[80px]"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reportedListings.map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell className="font-medium truncate max-w-[140px]">{r.listingTitle || "—"}</TableCell>
+                        <TableCell className="text-muted-foreground truncate max-w-[100px]">{r.reporterName || "—"}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{format(new Date(r.createdAt), "MMM d, yyyy")}</TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" onClick={() => setSelectedReport(r)} className="gap-1">
+                            <Eye className="w-4 h-4" />
+                            View
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-red-200/50 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-red-600" />
+                Disputed Bookings
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">Bookings with reported issues</p>
+            </CardHeader>
+            <CardContent>
+              {loadingReports ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">Loading...</p>
+              ) : disputedBookings.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">No disputed bookings</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Listing</TableHead>
+                      <TableHead>Reporter</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead className="w-[80px]"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {disputedBookings.map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell className="font-medium truncate max-w-[140px]">{r.listingTitle || "—"}</TableCell>
+                        <TableCell className="text-muted-foreground truncate max-w-[100px]">{r.reporterName || "—"}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{format(new Date(r.createdAt), "MMM d, yyyy")}</TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" onClick={() => setSelectedReport(r)} className="gap-1">
+                            <Eye className="w-4 h-4" />
+                            View
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Report Detail Dialog */}
+        <Dialog open={!!selectedReport} onOpenChange={(open) => !open && setSelectedReport(null)}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Report details</DialogTitle>
+            </DialogHeader>
+            {selectedReport && (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Listing</p>
+                  <Link href={`/listings/${selectedReport.listingId}`}>
+                    <span className="font-medium text-primary hover:underline cursor-pointer">
+                      {selectedReport.listingTitle || selectedReport.listingId}
+                    </span>
+                  </Link>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Seller</p>
+                  <p className="font-medium">{selectedReport.sellerName || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Reported by</p>
+                  <p className="font-medium">{selectedReport.reporterName || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Reason</p>
+                  <Badge variant="secondary">{REASON_LABELS[selectedReport.reason] || selectedReport.reason}</Badge>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">What&apos;s wrong</p>
+                  <p className="text-sm rounded-lg bg-muted/50 p-3 whitespace-pre-wrap">
+                    {selectedReport.details || "No additional details provided."}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Reported on</p>
+                  <p className="text-sm text-muted-foreground">{format(new Date(selectedReport.createdAt), "PPP 'at' p")}</p>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* Community Snapshot */}
         <div className="space-y-4">

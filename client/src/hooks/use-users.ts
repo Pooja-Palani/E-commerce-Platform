@@ -50,6 +50,35 @@ export function useUpdateUser() {
   });
 }
 
+export function useRemoveUserFromCommunities() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ userId, communityIds }: { userId: string; communityIds: string[] }) => {
+      const res = await fetch(`/api/admin/users/${userId}/remove-from-communities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ communityIds }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to remove user from communities");
+      }
+      return res.json();
+    },
+    onSuccess: (_, { userId }) => {
+      queryClient.invalidateQueries({ queryKey: [api.users.list.path] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "communities"] });
+      toast({ title: "User removed from selected communities" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
 export function useDeleteUser() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

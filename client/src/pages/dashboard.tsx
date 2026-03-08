@@ -1,6 +1,7 @@
 import { useAuthStore } from "@/store/use-auth";
-import { useCommunities, useJoinCommunity } from "@/hooks/use-communities";
+import { useCommunities, useJoinCommunity, useUserCommunities } from "@/hooks/use-communities";
 import { useListings } from "@/hooks/use-listings";
+import { useSellerOrders } from "@/hooks/use-orders";
 import { useForumPosts } from "@/hooks/use-forum";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -8,31 +9,58 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import {
   Calendar, Wrench, CreditCard, TrendingUp,
   Search, MapPin, Star, Clock, Laptop, Home as HomeIcon,
-  Building2, Settings, Info, ShoppingBag, MessageSquare, ArrowRight, Zap, ShieldCheck
+  Building2, Settings, Info, ShoppingBag, MessageSquare, ArrowRight, Zap, ShieldCheck, BarChart3, Globe, Lock
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Link, Redirect } from "wouter";
 import { formatDistanceToNow } from "date-fns";
+import * as React from "react";
 
 export default function Dashboard() {
   const user = useAuthStore(s => s.user);
+  const useAsUser = useAuthStore(s => s.useAsUser);
   const { data: communities, isLoading: loadingComm } = useCommunities();
+  const { data: userCommunitiesData = [], isLoading: loadingUserCommunities } = useUserCommunities(user?.id ?? "");
   const { data: listings, isLoading: loadingList } = useListings();
+  const { data: sellerOrders = [] } = useSellerOrders();
   const { data: posts, isLoading: loadingPosts } = useForumPosts(user?.communityId || "");
   const join = useJoinCommunity();
 
+  const sellerStockListings = React.useMemo(() => {
+    if (!listings || !user) return [];
+    const mine = listings.filter((l: any) => l.sellerId === user.id && l.availabilityBasis === "STOCK" && l.buyNowEnabled);
+    const soldByListing: Record<string, number> = {};
+    (sellerOrders as any[]).forEach((o: any) => {
+      if (o.status === "CANCELLED") return;
+      soldByListing[o.listingId] = (soldByListing[o.listingId] ?? 0) + (o.quantity ?? 1);
+    });
+    return mine.map((l: any) => {
+      const sold = soldByListing[l.id] ?? 0;
+      const current = l.stockQuantity ?? 0;
+      const total = sold + current;
+      return { ...l, sold, total };
+    }).filter((l: any) => l.total > 0);
+  }, [listings, user, sellerOrders]);
+
+  const membershipByCommunityId = React.useMemo(() => {
+    const map = new Map<string, string>();
+    (userCommunitiesData as { community: { id: string }; joinStatus: string }[]).forEach((m: any) => {
+      map.set(m.community?.id ?? m.communityId, m.joinStatus);
+    });
+    return map;
+  }, [userCommunitiesData]);
+
   if (!user) return null;
 
-  if (user.role === 'ADMIN') {
-    return <Redirect to="/admin" />;
-  }
+  if (user.role === 'ADMIN' && !useAsUser) return <Redirect to="/admin" />;
+  if (user.role === 'COMMUNITY_MANAGER' && !useAsUser) return <Redirect to="/manager" />;
 
   const isPending = user.status === 'PENDING';
   const noCommunity = !user.communityId;
   const userCommunity = communities?.find(c => c.id === user.communityId);
 
-  if (loadingComm || loadingList || loadingPosts) {
+  if (loadingComm || loadingUserCommunities || loadingList || loadingPosts) {
     return (
       <Layout>
         <div className="h-full flex items-center justify-center">
@@ -86,29 +114,42 @@ export default function Dashboard() {
 
           {hasCommunities ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {communities?.map((community) => (
-                <Card key={community.id} className="group hover:border-primary/50 transition-all hover:shadow-2xl bg-white border-border/50 rounded-3xl overflow-hidden">
-                  <div className="h-32 bg-gradient-to-br from-primary/20 to-primary/5 group-hover:from-primary/30 group-hover:to-primary/10 transition-colors flex items-center justify-center">
-                    <Building2 className="w-12 h-12 text-primary/40 group-hover:scale-110 transition-transform" />
-                  </div>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center justify-between text-xl">
-                      <span>{community.name}</span>
-                      <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-widest">{community.locality}</Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">{community.description || "A vibrant community for residents to connect and share services."}</p>
-                    <Button
-                      className="w-full font-bold h-12 rounded-2xl shadow-lg shadow-primary/20"
-                      onClick={() => join.mutate(community.id)}
-                      disabled={join.isPending}
-                    >
-                      {join.isPending ? "Joining..." : `Join ${community.name}`}
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
+              {communities?.map((community) => {
+                const joinStatus = membershipByCommunityId.get(community.id);
+                const isJoined = joinStatus === "ACTIVE";
+                const isPending = joinStatus === "PENDING";
+                const isJoiningThis = join.isPending && join.variables === community.id;
+                return (
+                  <Card key={community.id} className="group hover:border-primary/50 transition-all hover:shadow-2xl bg-white border-border/50 rounded-3xl overflow-hidden">
+                    <div className="h-32 bg-gradient-to-br from-primary/20 to-primary/5 group-hover:from-primary/30 group-hover:to-primary/10 transition-colors flex items-center justify-center">
+                      <Building2 className="w-12 h-12 text-primary/40 group-hover:scale-110 transition-transform" />
+                    </div>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-xl">
+                        <span>{community.name}</span>
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant="outline" className={`text-[10px] font-bold uppercase tracking-widest ${(community as any).visibility === 'PRIVATE' ? 'border-amber-200 text-amber-700 bg-amber-50' : 'border-blue-200 text-blue-700 bg-blue-50'}`}>
+                            {(community as any).visibility === 'PRIVATE' ? <Lock className="w-3 h-3 mr-0.5" /> : <Globe className="w-3 h-3 mr-0.5" />}
+                            {(community as any).visibility || 'PUBLIC'}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-widest">{community.locality}</Badge>
+                        </div>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">{community.description || "A vibrant community for residents to connect and share services."}</p>
+                      <Button
+                        className="w-full font-bold h-12 rounded-2xl shadow-lg shadow-primary/20"
+                        onClick={() => join.mutate(community.id)}
+                        disabled={join.isPending || isJoined || isPending}
+                        variant={isJoined ? "secondary" : "default"}
+                      >
+                        {isJoiningThis ? "Joining..." : isJoined ? "Joined community" : isPending ? "Request sent" : `Join ${community.name}`}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           ) : (
             <Card className="border-border/50 p-8 text-center">
@@ -173,6 +214,32 @@ export default function Dashboard() {
             </div>
           </div>
         </section>
+
+        {/* Seller stock summary (limited-stock items only) */}
+        {user?.isSeller && sellerStockListings.length > 0 && (
+          <section className="space-y-4">
+            <h2 className="text-lg font-bold text-slate-800">Your stock</h2>
+            <p className="text-sm text-muted-foreground -mt-2">Sold / total for items with limited stock</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {sellerStockListings.map((item: any) => (
+                <Card key={item.id} className="border-border/50 shadow-sm overflow-hidden">
+                  <CardContent className="p-5 flex items-center gap-4">
+                    <div className="p-3 bg-primary/10 text-primary rounded-xl shrink-0">
+                      <BarChart3 className="w-6 h-6" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-sm truncate">{item.title}</p>
+                      <p className="text-2xl font-extrabold text-primary mt-0.5">
+                        {item.sold}<span className="text-muted-foreground font-normal text-base">/{item.total}</span>
+                      </p>
+                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">sold</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Categories / Quick Links */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-6">

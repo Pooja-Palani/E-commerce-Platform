@@ -17,8 +17,10 @@ import { api, buildUrl } from "@shared/routes";
 import { useLocation, useParams, Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateUser } from "@/hooks/use-users";
+import { useUserCommunities } from "@/hooks/use-communities";
 import { useListing, useUpdateListing } from "@/hooks/use-listings";
 import { Loader2, ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { ImagePicker } from "@/components/image-picker";
 import { z } from "zod";
 
@@ -32,6 +34,10 @@ export default function ListService() {
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const updateUser = useUpdateUser();
+    const { data: userCommunities } = useUserCommunities(user?.id ?? "");
+    const communities = (userCommunities ?? [])
+        .filter((m: { joinStatus: string }) => m.joinStatus === "ACTIVE")
+        .map((m: { community: { id: string; name: string; parentId?: string | null } }) => m.community);
     const { data: existingListing, isLoading: loadingListing } = useListing(editingListingId || "");
     const updateListing = useUpdateListing();
 
@@ -39,6 +45,7 @@ export default function ListService() {
         resolver: zodResolver(insertListingSchema.extend({
             listingType: z.literal("SERVICE"),
             communityId: z.string().min(1, "Community is required"),
+            listToEntireCommunity: z.boolean().optional(),
             availabilityBasis: z.enum(["FOREVER", "TIMELINE", "STOCK"]).optional(),
             startDate: z.any().optional(),
             endDate: z.any().optional(),
@@ -55,6 +62,7 @@ export default function ListService() {
             price: 0,
             listingType: "SERVICE",
             communityId: user?.communityId || "",
+            listToEntireCommunity: false,
             sellerId: user?.id ?? "",
             availabilityBasis: "FOREVER",
             startDate: "",
@@ -110,6 +118,18 @@ export default function ListService() {
         if (user?.id) form.setValue("sellerId" as any, user.id);
     }, [user?.id, form]);
 
+    useEffect(() => {
+        const current = form.getValues("communityId");
+        if (user?.communityId && !current && communities.length > 0) {
+            form.setValue("communityId", user.communityId);
+        } else if (!current && communities.length === 1) {
+            form.setValue("communityId", communities[0].id);
+        }
+    }, [user?.communityId, communities, form]);
+
+    const selectedCommunity = communities.find((c: any) => c.id === form.watch("communityId"));
+    const isSubCommunity = selectedCommunity?.parentId;
+
     const addSlot = () => setSlots((s) => [...s, { startTime: "", endTime: "" }]);
     const removeSlot = (i: number) => setSlots((s) => s.filter((_, j) => j !== i));
     const updateSlot = (i: number, field: "startTime" | "endTime", value: string) =>
@@ -146,6 +166,11 @@ export default function ListService() {
 
     const handleSubmit = (data: any) => {
         const payload: any = { ...data, sellerId: user!.id };
+        const sel = communities.find((c: any) => c.id === data.communityId);
+        if (data.listToEntireCommunity && sel?.parentId) {
+            payload.communityId = sel.parentId;
+        }
+        delete payload.listToEntireCommunity;
         if (payload.category === "Other" && payload.customCategory) {
             payload.category = payload.customCategory.trim();
         }
@@ -253,6 +278,44 @@ export default function ListService() {
                                     />
                                     {form.formState.errors.title && <p className="text-xs text-destructive font-medium">{form.formState.errors.title.message}</p>}
                                 </div>
+
+                                {communities.length > 0 && (
+                                    <div className="grid gap-2">
+                                        <Label className="font-bold">Community</Label>
+                                        <Select
+                                            value={form.watch("communityId") || undefined}
+                                            onValueChange={(v) => form.setValue("communityId", v)}
+                                        >
+                                            <SelectTrigger className="h-11">
+                                                <SelectValue placeholder="Select community" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {communities.map((c: { id: string; name: string; parentId?: string | null }) => (
+                                                    <SelectItem key={c.id} value={c.id}>
+                                                        {c.parentId ? `${c.name} (sub-community)` : c.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {isSubCommunity && (
+                                            <div className="flex items-center justify-between rounded-xl border border-border/50 p-4 bg-muted/5 gap-4">
+                                                <div>
+                                                    <Label className="font-bold text-sm">List to</Label>
+                                                    <p className="text-xs text-muted-foreground">Entire parent community or just this sub-community?</p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Switch
+                                                        checked={form.watch("listToEntireCommunity" as any)}
+                                                        onCheckedChange={(v) => form.setValue("listToEntireCommunity" as any, v)}
+                                                    />
+                                                    <span className="text-xs font-medium">
+                                                        {form.watch("listToEntireCommunity" as any) ? "Entire community" : "Sub only"}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div className="grid gap-2">
                                     <Label className="font-bold">Category</Label>

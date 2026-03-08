@@ -1,20 +1,30 @@
 import { Layout } from "@/components/layout";
 import { useListings } from "@/hooks/use-listings";
 import { useAuthStore } from "@/store/use-auth";
+import { useUserCommunities } from "@/hooks/use-communities";
 import { ListingCard } from "@/components/listing-card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PackageOpen } from "lucide-react";
-import { useParams } from "wouter";
+import { useParams, Redirect } from "wouter";
 import { useCommunities } from "@/hooks/use-communities";
 
 export default function CommunityMarketplace() {
   const params = useParams();
   const { data: listings, isLoading } = useListings();
   const { data: communities } = useCommunities();
+  const { data: userCommunitiesData = [] } = useUserCommunities(useAuthStore(s => s.user?.id ?? ""));
   const user = useAuthStore(s => s.user!);
 
   const targetCommunityId = params.id || user.communityId;
   const currentCommunity = communities?.find(c => c.id === targetCommunityId);
+
+  const isSubCommunity = currentCommunity?.parentId;
+  const userMemberOfTarget = (userCommunitiesData as { community: { id: string }; joinStatus: string }[]).some(
+    m => m.community?.id === targetCommunityId && m.joinStatus === "ACTIVE"
+  );
+  if (isSubCommunity && !userMemberOfTarget) {
+    return <Redirect to={user.communityId ? `/communities/${user.communityId}` : "/"} />;
+  }
 
   if (isLoading) return <Layout><LoadingSpinner /></Layout>;
 

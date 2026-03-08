@@ -15,4 +15,5 @@
 // They use `dotenv/config` and manage their own pg connections.
 import "../script/create-missing-tables";
 import "../script/add-missing-columns";
+import "../script/add-reports-table";
 

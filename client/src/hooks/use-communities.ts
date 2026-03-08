@@ -3,6 +3,7 @@ import { api, buildUrl } from "@shared/routes";
 import { InsertCommunity, UpdateCommunityRequest, type User } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-error";
+import { useAuthStore } from "@/store/use-auth";
 
 export function useCommunities() {
   return useQuery({
@@ -128,11 +129,43 @@ export function useJoinCommunity() {
       useAuthStore.getState().setUser(updatedUser);
       queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
       queryClient.invalidateQueries({ queryKey: ["/api/users", updatedUser.id, "communities"] });
+      queryClient.invalidateQueries({ queryKey: [api.communities.list.path] });
       const isApproved = updatedUser.status === "ACTIVE";
       toast({
         title: isApproved ? "You've joined the community!" : "Join request sent",
         description: isApproved ? "You can now browse listings and participate." : "Your community manager will approve your request soon.",
       });
+    }
+  });
+}
+
+export function useLeaveCommunity() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (communityId: string) => {
+      const url = buildUrl(api.communities.leave.path, { id: communityId });
+      const res = await fetch(url, {
+        method: api.communities.leave.method,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const message = await getErrorMessage(res, "Failed to leave community");
+        throw new Error(message);
+      }
+      return api.communities.leave.responses[200].parse(await res.json());
+    },
+    onSuccess: (updatedUser: User) => {
+      useAuthStore.getState().setUser(updatedUser);
+      queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", updatedUser.id, "communities"] });
+      queryClient.invalidateQueries({ queryKey: [api.communities.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.listings.list.path] });
+      toast({ title: "Left community", description: "You will no longer see content from that community." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Could not leave", description: err.message, variant: "destructive" });
     }
   });
 }
@@ -209,15 +242,15 @@ export function useDeclineInvite() {
   });
 }
 
-export function useInviteByEmail(communityId: string | undefined) {
+export function useInviteByPhone(communityId: string | undefined) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async (email: string) => {
+    mutationFn: async (phone: string) => {
       const res = await fetch(`/api/communities/${communityId}/invite`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ phone }),
         credentials: "include",
       });
       const data = await res.json().catch(() => ({}));

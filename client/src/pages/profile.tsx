@@ -1,9 +1,9 @@
 import { Layout } from "@/components/layout";
 import { useAuthStore } from "@/store/use-auth";
-import { useCommunities, useUserCommunities, useJoinCommunity, usePendingInvites, useAcceptInvite, useDeclineInvite } from "@/hooks/use-communities";
+import { useCommunities, useUserCommunities, useJoinCommunity, useLeaveCommunity, usePendingInvites, useAcceptInvite, useDeclineInvite } from "@/hooks/use-communities";
 import { useUpdateUser } from "@/hooks/use-users";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { User, Mail, Shield, MapPin, Phone, Info, Building2, CheckCircle, Clock } from "lucide-react";
+import { User, Mail, Shield, MapPin, Phone, Info, Building2, CheckCircle, Clock, LogOut, Globe, Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -19,6 +19,7 @@ export default function Profile() {
     const { data: memberships = [], isLoading: loadingMemberships } = useUserCommunities(user?.id || "");
     const { data: pendingInvites = [] } = usePendingInvites();
     const join = useJoinCommunity();
+    const leave = useLeaveCommunity();
     const acceptInvite = useAcceptInvite();
     const declineInvite = useDeclineInvite();
     const update = useUpdateUser();
@@ -175,7 +176,7 @@ export default function Profile() {
                         <h2 className="text-2xl font-bold flex items-center gap-2">
                             <Building2 className="w-6 h-6 text-indigo-600" /> Community Memberships
                         </h2>
-                        <p className="text-muted-foreground mt-1">Join local communities and switch your active context.</p>
+                        <p className="text-muted-foreground mt-1">Join local communities and switch your active context. You can add more anytime.</p>
                     </div>
                     <div className="p-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -187,8 +188,12 @@ export default function Profile() {
                                     <Card key={community.id} className={`border-border/50 transition-all ${isPrimary ? 'ring-2 ring-primary bg-primary/5 shadow-md' : 'hover:shadow-md'}`}>
                                         <CardHeader>
                                             <CardTitle className="text-lg font-bold">{community.name}</CardTitle>
-                                            <CardDescription className="flex items-center gap-1 line-clamp-1">
-                                                <MapPin className="w-3 h-3" /> {community.locality}
+                                            <CardDescription className="flex items-center gap-2 line-clamp-1 flex-wrap">
+                                                <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {community.locality}</span>
+                                                <Badge variant="outline" className={`text-[10px] font-bold ${(community as any).visibility === 'PRIVATE' ? 'border-amber-200 text-amber-700 bg-amber-50' : 'border-blue-200 text-blue-700 bg-blue-50'}`}>
+                                                    {(community as any).visibility === 'PRIVATE' ? <Lock className="w-3 h-3 mr-0.5" /> : <Globe className="w-3 h-3 mr-0.5" />}
+                                                    {(community as any).visibility || 'PUBLIC'}
+                                                </Badge>
                                             </CardDescription>
                                         </CardHeader>
                                         <CardContent className="space-y-4">
@@ -209,6 +214,15 @@ export default function Profile() {
                                                             Set as Active Context
                                                         </Button>
                                                     )}
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="w-full text-muted-foreground hover:text-destructive hover:bg-destructive/5"
+                                                        onClick={() => leave.mutate(community.id)}
+                                                        disabled={leave.isPending}
+                                                    >
+                                                        <LogOut className="w-3 h-3 mr-2" /> Leave community
+                                                    </Button>
                                                 </div>
                                             ) : status === 'PENDING' ? (
                                                 <div className="space-y-4">
