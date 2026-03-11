@@ -29,11 +29,9 @@ export default function ServicesMarketplace() {
 
     const isLoading = loadingListings || loadingSettings;
 
-    const services = listings?.filter(l => {
-        if (l.listingType !== "SERVICE" || l.status !== "ACTIVE") return false;
-        if (l.communityId !== user.communityId) return false;
-        return true;
-    }) || [];
+    const services = listings?.filter(l =>
+        l.listingType === "SERVICE" && l.status === "ACTIVE"
+    ) || [];
 
     const handleAddToCart = (e: React.MouseEvent, service: (typeof services)[0]) => {
         e.preventDefault();

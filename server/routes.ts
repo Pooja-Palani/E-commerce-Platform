@@ -8,7 +8,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { db } from "./db";
-import { users, userCommunities, communities } from "@shared/schema";
+import { users, userCommunities, communities, insertListingSchema } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { upload } from "./upload";
 
@@ -659,7 +659,9 @@ export async function registerRoutes(
       if (!canSell) {
         return res.status(403).json({ message: "User is not a seller" });
       }
-      const input = api.listings.create.input.parse(req.body);
+      // Parse without status so client can never set it; new listings always need manager approval
+      const createSchema = insertListingSchema.omit({ status: true });
+      const input = createSchema.parse(req.body);
       const comm = await storage.getCommunity(input.communityId);
       if (!comm) return res.status(400).json({ message: "Invalid community" });
 
@@ -668,10 +670,13 @@ export async function registerRoutes(
         sellerId: user.id,
         sellerNameSnapshot: user.sellerDisplayName || user.fullName,
         communityNameSnapshot: comm.name,
-        visibility: "COMMUNITY_ONLY", // Listings are always scoped to their community only
-        status: "ACTIVE",
-        sellerContactSnapshot: user.phone || user.email // Default contact info
+        visibility: "COMMUNITY_ONLY",
+        status: "PENDING_APPROVAL",
+        sellerContactSnapshot: user.phone || user.email
       });
+      if (listing.status !== "PENDING_APPROVAL") {
+        console.error("Listing created with wrong status:", listing.status, "listingId:", listing.id);
+      }
       res.status(201).json(listing);
     } catch (err) {
       console.error("POST create listing error:", err);
@@ -909,6 +914,12 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Only administrators can remove users" });
       }
 
+      const target = await storage.getUser(req.params.id);
+      if (!target) return res.status(404).json({ message: "User not found" });
+      if (target.role === "ADMIN") {
+        return res.status(400).json({ message: "System admin accounts cannot be removed" });
+      }
+
       const success = await storage.deleteUser(req.params.id);
       if (!success) return res.status(404).json({ message: "User not found" });
 
@@ -1076,11 +1087,12 @@ export async function registerRoutes(
       const input = api.orders.create.input.parse(req.body);
       const listing = await storage.getListing(input.listingId);
       if (!listing) return res.status(404).json({ message: "Listing not found" });
-      if (listing.sellerId === req.user.id) return res.status(400).json({ message: "You cannot buy your own product" });
+      if (listing.sellerId === req.user.id) return res.status(400).json({ message: "You cannot order your own listing" });
 
       const quantity = input.quantity ?? 1;
+      const isService = listing.listingType === "SERVICE";
 
-      if (listing.availabilityBasis === "STOCK" && listing.buyNowEnabled) {
+      if (!isService && listing.availabilityBasis === "STOCK" && listing.buyNowEnabled) {
         const currentStock = listing.stockQuantity ?? 0;
         if (currentStock <= 0) {
           return res.status(400).json({ message: "This product is out of stock. Use 'Notify seller' to express interest." });
@@ -1091,7 +1103,7 @@ export async function registerRoutes(
         await storage.updateListingStock(listing.id, currentStock - quantity);
       }
 
-      const priceSnapshot = listing.buyNowEnabled ? listing.price * quantity : 0;
+      const priceSnapshot = isService ? 0 : (listing.buyNowEnabled ? listing.price * quantity : 0);
 
       const order = await storage.createOrder({
         listingId: listing.id,
@@ -1509,6 +1521,65 @@ export async function registerRoutes(
       res.status(200).json({ message: "Rejected successfully" });
     } catch (err) {
       res.status(500).json({ message: "Error rejecting member" });
+    }
+  });
+
+  app.get("/api/manager/pending-listings", authMiddleware, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (user.role !== "COMMUNITY_MANAGER" || !user.communityId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const pending = await storage.getPendingListings(user.communityId);
+      res.status(200).json(pending);
+    } catch (err) {
+      res.status(500).json({ message: "Error fetching pending listings" });
+    }
+  });
+
+  app.post("/api/manager/listings/:id/approve", authMiddleware, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (user.role !== "COMMUNITY_MANAGER" || !user.communityId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const listing = await storage.getListing(req.params.id);
+      if (!listing || listing.communityId !== user.communityId || listing.status !== "PENDING_APPROVAL") {
+        return res.status(404).json({ message: "Listing not found or not pending approval" });
+      }
+      const updated = await storage.updateListing(listing.id, { status: "ACTIVE", version: listing.version });
+      if (!updated) return res.status(409).json({ message: "Conflict" });
+      res.status(200).json(updated);
+    } catch (err) {
+      res.status(500).json({ message: "Error approving listing" });
+    }
+  });
+
+  app.post("/api/manager/listings/:id/reject", authMiddleware, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (user.role !== "COMMUNITY_MANAGER" || !user.communityId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const listing = await storage.getListing(req.params.id);
+      if (!listing || listing.communityId !== user.communityId || listing.status !== "PENDING_APPROVAL") {
+        return res.status(404).json({ message: "Listing not found or not pending approval" });
+      }
+      const updated = await storage.updateListing(listing.id, { status: "INACTIVE", version: listing.version });
+      if (!updated) return res.status(409).json({ message: "Conflict" });
+      res.status(200).json(updated);
+    } catch (err) {
+      res.status(500).json({ message: "Error rejecting listing" });
+    }
+  });
+
+  app.get("/api/communities/:id/manager", authMiddleware, async (req: any, res) => {
+    try {
+      const manager = await storage.getCommunityManager(req.params.id);
+      if (!manager) return res.status(404).json({ message: "Community manager not found" });
+      res.status(200).json(manager);
+    } catch (err) {
+      res.status(500).json({ message: "Error fetching community manager" });
     }
   });
 

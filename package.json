@@ -10,6 +10,7 @@
     "check": "tsc",
     "db:setup": "tsx db/setup.ts",
     "db:push": "drizzle-kit push",
+    "db:add-pending-approval": "tsx script/add-pending-approval-enum.ts",
     "script:set-password": "tsx script/set-admin-password.ts"
   },
   "dependencies": {

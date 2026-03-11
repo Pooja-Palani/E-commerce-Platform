@@ -10,7 +10,7 @@ export const communityVisibilityEnum = pgEnum("community_visibility", ["PUBLIC",
 export const communityStatusEnum = pgEnum("community_status", ["ACTIVE", "DISABLED"]);
 
 export const listingVisibilityEnum = pgEnum("listing_visibility", ["GLOBAL", "COMMUNITY_ONLY"]);
-export const listingStatusEnum = pgEnum("listing_status", ["ACTIVE", "INACTIVE", "REMOVED"]);
+export const listingStatusEnum = pgEnum("listing_status", ["ACTIVE", "INACTIVE", "REMOVED", "PENDING_APPROVAL"]);
 export const listingTypeEnum = pgEnum("listing_type", ["SERVICE", "PRODUCT"]);
 
 export const bookingStatusEnum = pgEnum("booking_status", ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED"]);

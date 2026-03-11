@@ -23,11 +23,9 @@ export default function ProductsMarketplace() {
 
     const isLoading = loadingListings || loadingSettings;
 
-    const products = listings?.filter(l => {
-        if (l.listingType !== "PRODUCT" || l.status !== "ACTIVE") return false;
-        if (l.communityId !== user.communityId) return false;
-        return true;
-    }) || [];
+    const products = listings?.filter(l =>
+        l.listingType === "PRODUCT" && l.status === "ACTIVE"
+    ) || [];
 
     const handleAddToCart = (e: React.MouseEvent, product: (typeof products)[0]) => {
         e.preventDefault();

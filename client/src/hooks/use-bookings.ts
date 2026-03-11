@@ -111,6 +111,7 @@ export function useCreateBooking() {
       queryClient.invalidateQueries({ queryKey: [api.bookings.list.path] });
       queryClient.invalidateQueries({ queryKey: [api.listings.list.path] });
       queryClient.invalidateQueries({ queryKey: ["/api/listings", variables.listingId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/seller/bookings"] }); // so seller sees new booking on My Services
       toast({ title: "Booking requested successfully!" });
     },
   });

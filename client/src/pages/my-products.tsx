@@ -1,6 +1,5 @@
 import { Layout } from "@/components/layout";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@shared/routes";
+import { useQuery, useQueries } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, ShoppingBag, Loader2, FileText } from "lucide-react";
@@ -15,6 +14,77 @@ import {
 } from "@/components/ui/select";
 import { format } from "date-fns";
 
+function useCommunityManagers(communityIds: string[]) {
+    const results = useQueries({
+        queries: communityIds.map((cid) => ({
+            queryKey: ["/api/communities", cid, "manager"],
+            queryFn: async () => {
+                const res = await fetch(`/api/communities/${cid}/manager`, { credentials: "include" });
+                if (!res.ok) return null;
+                return res.json() as Promise<{ id: string; fullName: string }>;
+            },
+            enabled: !!cid,
+        })),
+    });
+    const map: Record<string, string> = {};
+    communityIds.forEach((cid, i) => {
+        const data = results[i]?.data;
+        if (data?.fullName) map[cid] = data.fullName;
+    });
+    return map;
+}
+
+function ProductCard({
+    product,
+    getQuoted,
+    statusLabel,
+    statusBadgeClass,
+    approvalRecipient,
+}: {
+    product: any;
+    getQuoted: (id: string) => number | null;
+    statusLabel: string;
+    statusBadgeClass: string;
+    approvalRecipient?: string;
+}) {
+    const priceDisplay = product.price > 0
+        ? `₹${product.price}`
+        : (() => {
+            const quoted = getQuoted(product.id);
+            return quoted != null ? `₹${quoted} (quoted)` : "Price on request";
+        })();
+    return (
+        <Card className="border-border/50 shadow-sm overflow-hidden bg-white hover:shadow-md transition-all">
+            <CardContent className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                    <div className="p-3 rounded-xl bg-amber-500/10 text-amber-600">
+                        <ShoppingBag className="w-5 h-5" />
+                    </div>
+                    <Badge variant="secondary" className={`capitalize px-3 py-1 text-[10px] font-bold ${statusBadgeClass}`}>
+                        {statusLabel}
+                    </Badge>
+                </div>
+                <h3 className="text-lg font-bold mb-1 truncate">{product.title}</h3>
+                <p className="text-sm text-muted-foreground line-clamp-2 min-h-[40px] mb-4">
+                    {product.description}
+                </p>
+                {approvalRecipient && (
+                    <p className="text-xs text-amber-600 font-medium mb-2">Awaiting approval from: {approvalRecipient}</p>
+                )}
+                <div className="flex items-center justify-between pt-4 border-t border-border/40">
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Price</span>
+                        <span className="text-lg font-bold text-primary">{priceDisplay}</span>
+                    </div>
+                    <Link href={`/list-product/${product.id}`}>
+                        <Button variant="outline" size="sm" className="font-bold text-xs h-8">Edit Listing</Button>
+                    </Link>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
 export default function MyProducts() {
     const { data: listings, isLoading } = useQuery<any[]>({
         queryKey: ["/api/my-listings"],
@@ -22,8 +92,14 @@ export default function MyProducts() {
     const { data: sellerOrders = [], isLoading: loadingOrders } = useSellerOrders();
 
     const products = listings?.filter(l => l.listingType === "PRODUCT") || [];
+    const liveProducts = products.filter((p: any) => p.status === "ACTIVE");
+    const waitingProducts = products.filter((p: any) => p.status === "PENDING_APPROVAL");
+    const notLiveProducts = products.filter((p: any) => p.status === "INACTIVE" || p.status === "REMOVED");
+    const pendingCommunityIds = [...new Set(waitingProducts.map((p: any) => p.communityId).filter(Boolean))];
+    const managerByCommunity = useCommunityManagers(pendingCommunityIds);
+
     const getListingTitle = (listingId: string) =>
-        products.find(p => p.id === listingId)?.title || "Product";
+        (listings ?? []).find((l: any) => l.id === listingId)?.title || "Listing";
     const getQuotedPriceForListing = (listingId: string) => {
         const quotedOrders = sellerOrders.filter(
             (o: any) => o.listingId === listingId && o.priceSnapshot > 0
@@ -117,41 +193,45 @@ export default function MyProducts() {
                         <Loader2 className="w-8 h-8 animate-spin text-primary/50" />
                     </div>
                 ) : products.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {products.map((product) => (
-                            <Card key={product.id} className="border-border/50 shadow-sm overflow-hidden bg-white hover:shadow-md transition-all">
-                                <CardContent className="p-6">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="p-3 rounded-xl bg-amber-500/10 text-amber-600">
-                                            <ShoppingBag className="w-5 h-5" />
-                                        </div>
-                                        <Badge variant="secondary" className="capitalize px-3 py-1 text-[10px] font-bold bg-green-500/10 text-green-600 border-green-500/20">
-                                            {product.status.toLowerCase()}
-                                        </Badge>
-                                    </div>
-                                    <h3 className="text-lg font-bold mb-1 truncate">{product.title}</h3>
-                                    <p className="text-sm text-muted-foreground line-clamp-2 min-h-[40px] mb-4">
-                                        {product.description}
-                                    </p>
-                                    <div className="flex items-center justify-between pt-4 border-t border-border/40">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Price</span>
-                                            <span className="text-lg font-bold text-primary">
-                                                {product.price > 0
-                                                    ? `₹${product.price}`
-                                                    : (() => {
-                                                        const quoted = getQuotedPriceForListing(product.id);
-                                                        return quoted != null ? `₹${quoted} (quoted)` : "Price on request";
-                                                    })()}
-                                            </span>
-                                        </div>
-                                        <Link href={`/list-product/${product.id}`}>
-                                            <Button variant="outline" size="sm" className="font-bold text-xs h-8">Edit Listing</Button>
-                                        </Link>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
+                    <div className="space-y-10">
+                        {liveProducts.length > 0 && (
+                            <section>
+                                <h2 className="text-lg font-bold text-slate-800 mb-4">Live listings</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {liveProducts.map((product: any) => (
+                                        <ProductCard key={product.id} product={product} getQuoted={getQuotedPriceForListing} statusLabel="Live" statusBadgeClass="bg-green-500/10 text-green-600 border-green-500/20" />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+                        {waitingProducts.length > 0 && (
+                            <section>
+                                <h2 className="text-lg font-bold text-slate-800 mb-4">Waiting for approval</h2>
+                                <p className="text-sm text-muted-foreground mb-4">These listings will go live after your community manager approves them.</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {waitingProducts.map((product: any) => (
+                                        <ProductCard
+                                            key={product.id}
+                                            product={product}
+                                            getQuoted={getQuotedPriceForListing}
+                                            statusLabel="Pending approval"
+                                            statusBadgeClass="bg-amber-500/10 text-amber-600 border-amber-500/20"
+                                            approvalRecipient={managerByCommunity[product.communityId] ? `Community manager: ${managerByCommunity[product.communityId]}` : "Community manager"}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+                        {notLiveProducts.length > 0 && (
+                            <section>
+                                <h2 className="text-lg font-bold text-slate-800 mb-4">Not live</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {notLiveProducts.map((product: any) => (
+                                        <ProductCard key={product.id} product={product} getQuoted={getQuotedPriceForListing} statusLabel={product.status === "REMOVED" ? "Removed" : "Inactive"} statusBadgeClass="bg-slate-500/10 text-slate-600 border-slate-500/20" />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
                     </div>
                 ) : (
                     <div className="border-dashed border-2 border-border/50 rounded-2xl bg-muted/5 flex flex-col items-center justify-center p-20 text-center">

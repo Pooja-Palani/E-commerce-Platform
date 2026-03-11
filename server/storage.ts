@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, pool } from "./db";
 import {
   users, communities, listings, listingSlots, auditLogs, bookings, orders, productInterests, reports,
   type User, type InsertUser, type UpdateUserRequest,
@@ -28,6 +28,7 @@ export interface IStorage {
   // Communities
   getCommunity(id: string): Promise<Community | undefined>;
   getCommunities(parentId?: string): Promise<Community[]>;
+  getCommunityManager(communityId: string): Promise<{ id: string; fullName: string } | undefined>;
   getCommunityMembers(communityId: string): Promise<User[]>;
   createCommunity(community: InsertCommunity): Promise<Community>;
   updateCommunity(id: string, updates: UpdateCommunityRequest): Promise<Community | undefined>;
@@ -49,6 +50,7 @@ export interface IStorage {
   getListingsByIds(ids: string[]): Promise<Listing[]>;
   getListings(): Promise<Listing[]>;
   getListingsBySeller(sellerId: string): Promise<Listing[]>;
+  getPendingListings(communityId: string): Promise<Listing[]>;
   createListing(listing: InsertListing): Promise<Listing>;
   updateListing(id: string, updates: UpdateListingRequest): Promise<Listing | undefined>;
   updateListingStock(id: string, stockQuantity: number): Promise<Listing | undefined>;
@@ -148,6 +150,14 @@ export class DatabaseStorage implements IStorage {
       return await db.select().from(communities).where(eq(communities.parentId, parentId));
     }
     return await db.select().from(communities);
+  }
+
+  async getCommunityManager(communityId: string): Promise<{ id: string; fullName: string } | undefined> {
+    const [u] = await db.select({ id: users.id, fullName: users.fullName })
+      .from(users)
+      .where(and(eq(users.communityId, communityId), eq(users.role, "COMMUNITY_MANAGER")))
+      .limit(1);
+    return u;
   }
 
   async createCommunity(community: InsertCommunity): Promise<Community> {
@@ -289,9 +299,33 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(listings).where(eq(listings.sellerId, sellerId));
   }
 
+  async getPendingListings(communityId: string): Promise<Listing[]> {
+    return await db.select().from(listings).where(
+      and(eq(listings.communityId, communityId), eq(listings.status, "PENDING_APPROVAL"))
+    );
+  }
+
   async createListing(listing: InsertListing): Promise<Listing> {
-    const [newListing] = await db.insert(listings).values(listing).returning();
-    return newListing;
+    const { status: _dropped, ...rest } = listing as InsertListing & { status?: string };
+    const values = { ...rest, status: "PENDING_APPROVAL" as const };
+    const [inserted] = await db.insert(listings).values(values).returning();
+    if (!inserted) throw new Error("Insert failed");
+    // Force status via raw SQL so DB always has PENDING_APPROVAL (avoids default/trigger override)
+    try {
+      await pool.query(
+        "UPDATE listings SET status = 'PENDING_APPROVAL'::listing_status WHERE id = $1",
+        [inserted.id]
+      );
+    } catch (e: any) {
+      if (e.code === "22P02" || e.message?.includes("invalid input value for enum")) {
+        throw new Error(
+          "Database enum listing_status is missing PENDING_APPROVAL. Run: npm run db:add-pending-approval"
+        );
+      }
+      throw e;
+    }
+    const [updated] = await db.select().from(listings).where(eq(listings.id, inserted.id));
+    return updated ?? inserted;
   }
 
   async updateListing(id: string, updates: UpdateListingRequest): Promise<Listing | undefined> {

@@ -158,7 +158,7 @@ export default function ListService() {
             return listing;
         },
         onSuccess: () => {
-            toast({ title: "Service listed successfully", description: "Your service is now available to the community." });
+            toast({ title: "Listing submitted", description: "Your listing will go live after your community manager approves it." });
             queryClient.invalidateQueries({ queryKey: ["/api/my-listings"] });
             setLocation("/my-services");
         }

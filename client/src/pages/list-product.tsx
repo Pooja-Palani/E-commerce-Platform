@@ -41,9 +41,6 @@ export default function ListProduct() {
         .filter((m: { joinStatus: string }) => m.joinStatus === "ACTIVE")
         .map((m: { community: { id: string; name: string; parentId?: string | null } }) => m.community);
 
-    const selectedCommunity = communities.find((c: any) => c.id === form.watch("communityId"));
-    const isSubCommunity = selectedCommunity?.parentId;
-
     const form = useForm({
         resolver: zodResolver(insertListingSchema.extend({
             listingType: z.literal("PRODUCT"),
@@ -77,6 +74,9 @@ export default function ListProduct() {
             imageUrl: null as string | null,
         }
     });
+
+    const selectedCommunity = communities.find((c: any) => c.id === form.watch("communityId"));
+    const isSubCommunity = selectedCommunity?.parentId;
 
     useEffect(() => {
         const current = form.getValues("communityId");
@@ -139,7 +139,7 @@ export default function ListProduct() {
             return res.json();
         },
         onSuccess: () => {
-            toast({ title: "Product posted", description: "Your product has been posted successfully." });
+            toast({ title: "Listing submitted", description: "Your listing will go live after your community manager approves it." });
             queryClient.invalidateQueries({ queryKey: ["/api/my-listings"] });
             setLocation("/my-products");
         },

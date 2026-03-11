@@ -271,37 +271,39 @@ export default function AdminUsers() {
                                                                     <ArrowDownCircle className="w-3.5 h-3.5 mr-1" /> Demote
                                                                 </Button>
                                                             )}
+
+                                                            {/* Remove actions only for non-admin users */}
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="destructive"
+                                                                        className="bg-rose-500 hover:bg-rose-600 font-bold text-xs h-8 px-3"
+                                                                        disabled={deleteUser.isPending || removeFromCommunities.isPending}
+                                                                    >
+                                                                        Remove <ChevronDown className="w-3 h-3 ml-1" />
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end">
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => handleOpenRemoveFromCommunities({ id: user.id, fullName: user.fullName })}
+                                                                    >
+                                                                        <UserMinus className="w-3.5 h-3.5 mr-2" /> Remove from community
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => handleRemoveFromApp(user.id, user.fullName)}
+                                                                        className="text-rose-600 focus:text-rose-600"
+                                                                    >
+                                                                        <Trash2 className="w-3.5 h-3.5 mr-2" /> Remove from app
+                                                                    </DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
                                                         </>
                                                     ) : (
-                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest self-center mr-2">System Admin</span>
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest self-center mr-2">
+                                                            System Admin
+                                                        </span>
                                                     )}
-
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button
-                                                                size="sm"
-                                                                variant="destructive"
-                                                                className="bg-rose-500 hover:bg-rose-600 font-bold text-xs h-8 px-3"
-                                                                disabled={deleteUser.isPending || removeFromCommunities.isPending}
-                                                            >
-                                                                Remove <ChevronDown className="w-3 h-3 ml-1" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem
-                                                                onClick={() => handleOpenRemoveFromCommunities({ id: user.id, fullName: user.fullName })}
-                                                                disabled={user.role === "ADMIN"}
-                                                            >
-                                                                <UserMinus className="w-3.5 h-3.5 mr-2" /> Remove from community
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                onClick={() => handleRemoveFromApp(user.id, user.fullName)}
-                                                                className="text-rose-600 focus:text-rose-600"
-                                                            >
-                                                                <Trash2 className="w-3.5 h-3.5 mr-2" /> Remove from app
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
                                                 </div>
                                             </td>
                                         </tr>

@@ -1,6 +1,5 @@
 import { Layout } from "@/components/layout";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@shared/routes";
+import { useQuery, useQueries } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Wrench, Loader2, Calendar, Eye, BarChart3 } from "lucide-react";
@@ -15,6 +14,100 @@ import {
 } from "@/components/ui/select";
 import { format } from "date-fns";
 
+function useCommunityManagers(communityIds: string[]) {
+    const results = useQueries({
+        queries: communityIds.map((cid) => ({
+            queryKey: ["/api/communities", cid, "manager"],
+            queryFn: async () => {
+                const res = await fetch(`/api/communities/${cid}/manager`, { credentials: "include" });
+                if (!res.ok) return null;
+                return res.json() as Promise<{ id: string; fullName: string }>;
+            },
+            enabled: !!cid,
+        })),
+    });
+    const map: Record<string, string> = {};
+    communityIds.forEach((cid, i) => {
+        const data = results[i]?.data;
+        if (data?.fullName) map[cid] = data.fullName;
+    });
+    return map;
+}
+
+function ServiceCard({
+    service,
+    bookingCount,
+    statusLabel,
+    statusBadgeClass,
+    approvalRecipient,
+}: {
+    service: any;
+    bookingCount: number;
+    statusLabel: string;
+    statusBadgeClass: string;
+    approvalRecipient?: string;
+}) {
+    const hasBookings = bookingCount > 0;
+    return (
+        <Card className="border-border/50 shadow-sm overflow-hidden bg-white hover:shadow-md transition-all">
+            <CardContent className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                    <div className="p-3 rounded-xl bg-primary/5 text-primary">
+                        <Wrench className="w-5 h-5" />
+                    </div>
+                    <Badge variant="secondary" className={`capitalize px-3 py-1 text-[10px] font-bold ${statusBadgeClass}`}>
+                        {statusLabel}
+                    </Badge>
+                </div>
+                <h3 className="text-lg font-bold mb-1 truncate">{service.title}</h3>
+                <p className="text-sm text-muted-foreground line-clamp-2 min-h-[40px] mb-4">
+                    {service.description}
+                </p>
+                {approvalRecipient && (
+                    <p className="text-xs text-amber-600 font-medium mb-2">Awaiting approval from: {approvalRecipient}</p>
+                )}
+                <div className="flex flex-col gap-3 pt-4 border-t border-border/40">
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Price</span>
+                            <span className="text-lg font-bold text-primary">₹{service.price}</span>
+                        </div>
+                        {bookingCount > 0 && (
+                            <span className="text-xs font-medium text-muted-foreground">
+                                {bookingCount} booking{bookingCount !== 1 ? "s" : ""}
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <Link href={`/listings/${service.id}`}>
+                            <Button variant="outline" size="sm" className="font-bold text-xs h-8 gap-1.5">
+                                <Eye className="w-3.5 h-3.5" />
+                                View details
+                            </Button>
+                        </Link>
+                        <Link href={`/list-service/${service.id}`}>
+                            <Button variant="outline" size="sm" className="font-bold text-xs h-8">
+                                Edit Listing
+                            </Button>
+                        </Link>
+                        {hasBookings && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="font-bold text-xs h-8 text-primary hover:text-primary"
+                                onClick={() => document.getElementById("seller-bookings")?.scrollIntoView({ behavior: "smooth" })}
+                            >
+                                <Calendar className="w-3.5 h-3.5 mr-1" />
+                                View bookings
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
 export default function MyServices() {
     const { data: listings, isLoading } = useQuery<any[]>({
         queryKey: ["/api/my-listings"],
@@ -23,6 +116,12 @@ export default function MyServices() {
     const updateBookingStatus = useUpdateBookingStatus();
 
     const services = listings?.filter(l => l.listingType === "SERVICE") || [];
+    const liveServices = services.filter((s: any) => s.status === "ACTIVE");
+    const waitingServices = services.filter((s: any) => s.status === "PENDING_APPROVAL");
+    const notLiveServices = services.filter((s: any) => s.status === "INACTIVE" || s.status === "REMOVED");
+    const pendingCommunityIds = [...new Set(waitingServices.map((s: any) => s.communityId).filter(Boolean))];
+    const managerByCommunity = useCommunityManagers(pendingCommunityIds);
+
     const getListingTitle = (listingId: string) =>
         services.find(s => s.id === listingId)?.title || "Service";
 
@@ -43,11 +142,12 @@ export default function MyServices() {
                         {!isLoading && services.length > 0 && (
                             <p className="text-muted-foreground text-sm mt-1 flex items-center gap-1.5">
                                 <BarChart3 className="w-4 h-4" />
-                                <span className="font-medium text-foreground">{services.length}</span> service{services.length !== 1 ? "s" : ""} listed
+                                <span className="font-medium text-foreground">{liveServices.length}</span> live
                                 <span className="text-muted-foreground">·</span>
-                                <span className="font-medium text-foreground">
-                                    {services.filter((s: any) => (s.status || "").toLowerCase() === "active").length}
-                                </span> active
+                                <span className="font-medium text-foreground">{waitingServices.length}</span> waiting for approval
+                                {notLiveServices.length > 0 && (
+                                    <><span className="text-muted-foreground">·</span><span className="font-medium text-foreground">{notLiveServices.length}</span> not live</>
+                                )}
                             </p>
                         )}
                     </div>
@@ -118,65 +218,57 @@ export default function MyServices() {
                         <Loader2 className="w-8 h-8 animate-spin text-primary/50" />
                     </div>
                 ) : services.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {services.map((service) => (
-                            <Card key={service.id} className="border-border/50 shadow-sm overflow-hidden bg-white hover:shadow-md transition-all">
-                                <CardContent className="p-6">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="p-3 rounded-xl bg-primary/5 text-primary">
-                                            <Wrench className="w-5 h-5" />
-                                        </div>
-                                        <Badge variant="secondary" className="capitalize px-3 py-1 text-[10px] font-bold bg-green-500/10 text-green-600 border-green-500/20">
-                                            {service.status.toLowerCase()}
-                                        </Badge>
-                                    </div>
-                                    <h3 className="text-lg font-bold mb-1 truncate">{service.title}</h3>
-                                    <p className="text-sm text-muted-foreground line-clamp-2 min-h-[40px] mb-4">
-                                        {service.description}
-                                    </p>
-                                    <div className="flex flex-col gap-3 pt-4 border-t border-border/40">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Price</span>
-                                                <span className="text-lg font-bold text-primary">₹{service.price}</span>
-                                            </div>
-                                            {(() => {
-                                                const bookingCount = sellerBookings.filter((b: any) => b.listingId === service.id).length;
-                                                return bookingCount > 0 ? (
-                                                    <span className="text-xs font-medium text-muted-foreground">
-                                                        {bookingCount} booking{bookingCount !== 1 ? "s" : ""}
-                                                    </span>
-                                                ) : null;
-                                            })()}
-                                        </div>
-                                        <div className="flex flex-wrap gap-2">
-                                            <Link href={`/listings/${service.id}`}>
-                                                <Button variant="outline" size="sm" className="font-bold text-xs h-8 gap-1.5">
-                                                    <Eye className="w-3.5 h-3.5" />
-                                                    View details
-                                                </Button>
-                                            </Link>
-                                            <Link href={`/list-service/${service.id}`}>
-                                                <Button variant="outline" size="sm" className="font-bold text-xs h-8">
-                                                    Edit Listing
-                                                </Button>
-                                            </Link>
-                                            {sellerBookings.some((b: any) => b.listingId === service.id) && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="font-bold text-xs h-8 text-primary hover:text-primary"
-                                                    onClick={() => document.getElementById("seller-bookings")?.scrollIntoView({ behavior: "smooth" })}
-                                                >
-                                                    <Calendar className="w-3.5 h-3.5 mr-1" />
-                                                    View bookings
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
+                    <div className="space-y-10">
+                        {liveServices.length > 0 && (
+                            <section>
+                                <h2 className="text-lg font-bold text-slate-800 mb-4">Live listings</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {liveServices.map((service: any) => (
+                                        <ServiceCard
+                                            key={service.id}
+                                            service={service}
+                                            bookingCount={sellerBookings.filter((b: any) => b.listingId === service.id).length}
+                                            statusLabel="Live"
+                                            statusBadgeClass="bg-green-500/10 text-green-600 border-green-500/20"
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+                        {waitingServices.length > 0 && (
+                            <section>
+                                <h2 className="text-lg font-bold text-slate-800 mb-4">Waiting for approval</h2>
+                                <p className="text-sm text-muted-foreground mb-4">These listings will go live after your community manager approves them.</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {waitingServices.map((service: any) => (
+                                        <ServiceCard
+                                            key={service.id}
+                                            service={service}
+                                            bookingCount={0}
+                                            statusLabel="Pending approval"
+                                            statusBadgeClass="bg-amber-500/10 text-amber-600 border-amber-500/20"
+                                            approvalRecipient={managerByCommunity[service.communityId] ? `Community manager: ${managerByCommunity[service.communityId]}` : "Community manager"}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+                        {notLiveServices.length > 0 && (
+                            <section>
+                                <h2 className="text-lg font-bold text-slate-800 mb-4">Not live</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {notLiveServices.map((service: any) => (
+                                        <ServiceCard
+                                            key={service.id}
+                                            service={service}
+                                            bookingCount={sellerBookings.filter((b: any) => b.listingId === service.id).length}
+                                            statusLabel={service.status === "REMOVED" ? "Removed" : "Inactive"}
+                                            statusBadgeClass="bg-slate-500/10 text-slate-600 border-slate-500/20"
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
                     </div>
                 ) : (
                     <div className="border-dashed border-2 border-border/50 rounded-2xl bg-muted/5 flex flex-col items-center justify-center p-20 text-center">

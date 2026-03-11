@@ -74,7 +74,7 @@ export function AppSidebar() {
   const showResidentNav = user.role === "RESIDENT" || (isAdminOrManager && useAsUser);
 
   const navigationItems = [
-    { title: "Dashboard", url: "/", icon: LayoutDashboard },
+    { title: "Home", url: "/", icon: LayoutDashboard },
     { title: "Community Chat", url: "/forum", icon: MessageSquare },
     ...(viewMode === "BUYER" ? [{ title: "My Activity", url: "/activity", icon: Calendar }] : []),
     ...(showResidentNav ? [
