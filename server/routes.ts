@@ -56,7 +56,7 @@ export async function registerRoutes(
         phone: input.phone,
         passwordHash,
         role: "RESIDENT", // Enforce RESIDENT role by default for all new accounts
-        status: "ACTIVE",
+        status: "PENDING", // New users always require approval
         isSeller: input.isSeller || false,
         communityId: inviteCommunityId && community ? inviteCommunityId : input.communityId,
         sellerDisplayName: input.sellerDisplayName,
@@ -68,7 +68,7 @@ export async function registerRoutes(
         bio: input.bio,
       });
       if (inviteCommunityId && community) {
-        await storage.createUserCommunity({ userId: user.id, communityId: inviteCommunityId, status: "ACTIVE" });
+        await storage.createUserCommunity({ userId: user.id, communityId: inviteCommunityId, status: "PENDING" });
       }
 
       await storage.createAuditLog({
@@ -182,6 +182,10 @@ export async function registerRoutes(
       const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
       const user = await storage.getUser(decoded.userId);
       if (!user) return res.status(401).json({ message: "User not found" });
+
+      if (user.status === "PENDING" && user.role !== "ADMIN") {
+        return res.status(403).json({ message: "Your account is pending approval by a community manager." });
+      }
 
       const settings = await storage.getSettings();
       if (settings.maintenanceMode && user.role !== "ADMIN") {
@@ -315,10 +319,9 @@ export async function registerRoutes(
       const community = await storage.getCommunity(communityId);
       if (!community) return res.status(404).json({ message: "Community not found" });
 
-      // Public communities: auto-approve. Private: require manager approval.
-      const isPublic = community.visibility === "PUBLIC";
-      const membershipStatus = isPublic ? "ACTIVE" : "PENDING";
-      const userStatus = isPublic ? "ACTIVE" : "PENDING";
+      // All communities require manager approval
+      const membershipStatus = "PENDING";
+      const userStatus = "PENDING";
 
       // Check if user already requested or joined this community
       const existing = await storage.getUserCommunity(user.id, communityId);
@@ -849,6 +852,16 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Only administrators can change user roles" });
       }
 
+      // Admin Protection: Administrators cannot change their own role or status to avoid lockout
+      if (currentUserId === targetUserId && currentUserRole === "ADMIN") {
+        if (input.role && input.role !== "ADMIN") {
+          return res.status(400).json({ message: "Administrators cannot change their own role" });
+        }
+        if (input.status && input.status !== "ACTIVE") {
+          return res.status(400).json({ message: "Administrators cannot deactivate their own account" });
+        }
+      }
+
       // Restriction: Users can only update themselves unless they are ADMIN
       if (currentUserId !== targetUserId && currentUserRole !== "ADMIN") {
         return res.status(403).json({ message: "Forbidden" });
@@ -876,6 +889,9 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Only administrators can remove users from communities" });
       }
       const userId = req.params.id;
+      if (userId === req.user.id) {
+        return res.status(400).json({ message: "You cannot remove yourself from communities" });
+      }
       const { communityIds } = req.body as { communityIds?: string[] };
       if (!Array.isArray(communityIds) || communityIds.length === 0) {
         return res.status(400).json({ message: "Provide at least one community ID" });
@@ -916,6 +932,9 @@ export async function registerRoutes(
 
       const target = await storage.getUser(req.params.id);
       if (!target) return res.status(404).json({ message: "User not found" });
+      if (target.id === req.user.id) {
+        return res.status(400).json({ message: "You cannot remove your own administrator account" });
+      }
       if (target.role === "ADMIN") {
         return res.status(400).json({ message: "System admin accounts cannot be removed" });
       }
