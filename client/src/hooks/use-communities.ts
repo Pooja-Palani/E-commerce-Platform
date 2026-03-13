@@ -53,6 +53,20 @@ export function useUserCommunities(userId: string) {
   });
 }
 
+/** True only when user has at least one ACTIVE community membership (required for marketplace access). */
+export function useHasApprovedAccess() {
+  const user = useAuthStore((s) => s.user);
+  const useAsUser = useAuthStore((s) => s.useAsUser);
+  const { data: userCommunitiesData = [], isLoading } = useUserCommunities(user?.id ?? "");
+  const isAdminOrManager = user?.role === "ADMIN" || user?.role === "COMMUNITY_MANAGER";
+  const actingAsResident = user?.role === "RESIDENT" || (isAdminOrManager && useAsUser);
+  const hasActiveMembership = (userCommunitiesData as { joinStatus: string }[]).some(
+    (m) => m.joinStatus === "ACTIVE"
+  );
+  const hasApprovedAccess = !actingAsResident || (user?.status === "ACTIVE" && hasActiveMembership);
+  return { hasApprovedAccess, isLoading };
+}
+
 export function useCreateCommunity() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

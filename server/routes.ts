@@ -9,7 +9,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { db } from "./db";
 import { users, userCommunities, communities, insertListingSchema } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { upload } from "./upload";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-for-dev-only";
@@ -50,13 +50,19 @@ export async function registerRoutes(
 
       const inviteCommunityId = (input as any).inviteCommunityId;
       const community = inviteCommunityId ? await storage.getCommunity(inviteCommunityId) : null;
+      // Newly onboarded users: no community = PENDING until they join & get approved.
+      // With invite: public = PENDING (approval required); private = ACTIVE (invite = pre-approval).
+      const isPublicInvite = community?.visibility === "PUBLIC";
+      const hasInvite = inviteCommunityId && community;
+      const needsApproval = hasInvite ? isPublicInvite : true; // No invite = no community yet = PENDING
+      const userStatus = needsApproval ? "PENDING" : "ACTIVE";
       const user = await storage.createUser({
         fullName: input.fullName,
         email: input.email,
         phone: input.phone,
         passwordHash,
         role: "RESIDENT", // Enforce RESIDENT role by default for all new accounts
-        status: "PENDING", // New users always require approval
+        status: userStatus,
         isSeller: input.isSeller || false,
         communityId: inviteCommunityId && community ? inviteCommunityId : input.communityId,
         sellerDisplayName: input.sellerDisplayName,
@@ -68,7 +74,8 @@ export async function registerRoutes(
         bio: input.bio,
       });
       if (inviteCommunityId && community) {
-        await storage.createUserCommunity({ userId: user.id, communityId: inviteCommunityId, status: "PENDING" });
+        const membershipStatus = needsApproval ? "PENDING" : "ACTIVE";
+        await storage.createUserCommunity({ userId: user.id, communityId: inviteCommunityId, status: membershipStatus });
       }
 
       await storage.createAuditLog({
@@ -113,7 +120,8 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      if (user.status !== "ACTIVE") {
+      // Allow ACTIVE and PENDING (so pending users can see approval status); block SUSPENDED/REMOVED
+      if (user.status !== "ACTIVE" && user.status !== "PENDING") {
         return res.status(401).json({ message: "User account is not active" });
       }
 
@@ -312,25 +320,37 @@ export async function registerRoutes(
 
   app.post(api.communities.join.path, authMiddleware, async (req: any, res) => {
     try {
-      const user = req.user;
+      // Refetch user to get latest state (version, communityId) - avoids stale data from other tabs/sessions
+      const user = await storage.getUser(req.user.id) ?? req.user;
       const communityId = req.params.id;
 
       // Check if the community exists
       const community = await storage.getCommunity(communityId);
       if (!community) return res.status(404).json({ message: "Community not found" });
 
-      // All communities require manager approval
-      const membershipStatus = "PENDING";
-      const userStatus = "PENDING";
+      // Private: always require manager approval. Public: user in another community → no approval; user in no community → approval required.
+      const isPublic = community.visibility === "PUBLIC";
+      const userCommunities = await storage.getUserCommunities(user.id);
+      const otherActive = userCommunities.filter((uc) => uc.communityId !== communityId && uc.status === "ACTIVE");
+      const hasAnyOtherCommunity = (user.communityId != null && user.communityId !== communityId) || otherActive.length > 0;
+      const isNewlyOnboarded = !hasAnyOtherCommunity;
+
+      const needsApproval = !isPublic || (isPublic && isNewlyOnboarded);
+      const membershipStatus = needsApproval ? "PENDING" : "ACTIVE";
+      const userStatus = needsApproval ? "PENDING" : "ACTIVE";
 
       // Check if user already requested or joined this community
       const existing = await storage.getUserCommunity(user.id, communityId);
       if (!existing) {
         await storage.createUserCommunity({ userId: user.id, communityId, status: membershipStatus });
+      } else if (existing.status !== "ACTIVE" && existing.status !== membershipStatus) {
+        // Re-join after REMOVED or update PENDING→ACTIVE if logic changed
+        await storage.updateUserCommunity(existing.id, membershipStatus);
       }
 
-      // If user has no context, set this as their primary community
-      if (!user.communityId) {
+      // Set primary community and status: always update when this is/will be their primary (ensures PENDING is applied)
+      const thisIsPrimary = !user.communityId || user.communityId === communityId;
+      if (thisIsPrimary) {
         await storage.updateUser(user.id, { communityId, status: userStatus, version: user.version });
       }
 
@@ -514,9 +534,21 @@ export async function registerRoutes(
         await storage.updateCommunityInvite(invite.id, "REJECTED");
         return res.status(400).json({ message: "You are already in this community" });
       }
-      if (uc) await storage.updateUserCommunity(uc.id, "ACTIVE");
-      else await storage.createUserCommunity({ userId: req.user.id, communityId: invite.communityId, status: "ACTIVE" });
-      if (!req.user.communityId) await storage.updateUser(req.user.id, { communityId: invite.communityId, status: "ACTIVE", version: req.user.version });
+      // Same approval logic: user in another community → no approval; user in no community → approval needed for PUBLIC
+      const community = await storage.getCommunity(invite.communityId);
+      const userCommunities = await storage.getUserCommunities(req.user.id);
+      const otherActive = userCommunities.filter((c) => c.communityId !== invite.communityId && c.status === "ACTIVE");
+      const hasAnyOtherCommunity = (req.user.communityId && req.user.communityId !== invite.communityId) || otherActive.length > 0;
+      const isPublic = community?.visibility === "PUBLIC";
+      const needsApproval = isPublic && !hasAnyOtherCommunity;
+      const membershipStatus = needsApproval ? "PENDING" : "ACTIVE";
+      const userStatus = needsApproval ? "PENDING" : "ACTIVE";
+      if (uc) await storage.updateUserCommunity(uc.id, membershipStatus);
+      else await storage.createUserCommunity({ userId: req.user.id, communityId: invite.communityId, status: membershipStatus });
+      // Update user when setting/keeping this as primary community (no primary yet, or primary is this one)
+      if (!req.user.communityId || req.user.communityId === invite.communityId) {
+        await storage.updateUser(req.user.id, { communityId: invite.communityId, status: userStatus, version: req.user.version });
+      }
       await storage.updateCommunityInvite(invite.id, "ACCEPTED", req.user.id);
       const updatedUser = await storage.getUser(req.user.id);
       res.status(200).json(updatedUser);
@@ -614,11 +646,15 @@ export async function registerRoutes(
       const user = req.user;
       let filtered = allListings;
       if (user.role === "RESIDENT") {
-        const userCommunitiesList = await storage.getUserCommunities(user.id);
-        const userCommunityIds = new Set<string>();
-        if (user.communityId) userCommunityIds.add(user.communityId);
-        userCommunitiesList.filter(uc => uc.status === "ACTIVE").forEach(uc => userCommunityIds.add(uc.communityId));
-        filtered = allListings.filter(l => userCommunityIds.has(l.communityId));
+        // PENDING users have no ACTIVE community membership - block marketplace access
+        if (user.status === "PENDING") {
+          filtered = [];
+        } else {
+          const userCommunitiesList = await storage.getUserCommunities(user.id);
+          const userCommunityIds = new Set<string>();
+          userCommunitiesList.filter(uc => uc.status === "ACTIVE").forEach(uc => userCommunityIds.add(uc.communityId));
+          filtered = allListings.filter(l => userCommunityIds.has(l.communityId));
+        }
       }
       res.status(200).json(filtered);
     } catch (err) {
@@ -642,14 +678,11 @@ export async function registerRoutes(
     const user = req.user;
 
     if (user.role === "RESIDENT") {
+      if (user.status === "PENDING") return res.status(403).json({ message: "Your community membership is pending approval. You'll have access once approved." });
       const userCommunitiesList = await storage.getUserCommunities(user.id);
       const userCommunityIds = new Set<string>();
-      if (user.communityId) userCommunityIds.add(user.communityId);
       userCommunitiesList.filter(uc => uc.status === "ACTIVE").forEach(uc => userCommunityIds.add(uc.communityId));
-
-      if (!userCommunityIds.has(listing.communityId)) {
-        return res.status(404).json({ message: "Listing not found" });
-      }
+      if (!userCommunityIds.has(listing.communityId)) return res.status(404).json({ message: "Listing not found" });
     }
 
     res.status(200).json(listing);
@@ -984,6 +1017,7 @@ export async function registerRoutes(
 
   app.post(api.bookings.create.path, authMiddleware, async (req: any, res) => {
     try {
+      if (req.user.status === "PENDING") return res.status(403).json({ message: "Your community membership is pending approval. You'll have access once approved." });
       const input = api.bookings.create.input.parse(req.body);
       const listing = await storage.getListing(input.listingId);
       if (!listing) return res.status(404).json({ message: "Listing not found" });
@@ -1103,6 +1137,7 @@ export async function registerRoutes(
 
   app.post(api.orders.create.path, authMiddleware, async (req: any, res) => {
     try {
+      if (req.user.status === "PENDING") return res.status(403).json({ message: "Your community membership is pending approval. You'll have access once approved." });
       const input = api.orders.create.input.parse(req.body);
       const listing = await storage.getListing(input.listingId);
       if (!listing) return res.status(404).json({ message: "Listing not found" });
@@ -1478,11 +1513,29 @@ export async function registerRoutes(
         .innerJoin(users, eq(userCommunities.userId, users.id))
         .where(and(eq(userCommunities.communityId, user.communityId), eq(userCommunities.status, 'PENDING')));
 
-      // Format response to match expected frontend structure but include join mapping
-      const formattedUsers = pendingRequests.map(r => ({
+      const pendingUserIds = pendingRequests.map((r) => r.user.id);
+      const activeMemberships =
+        pendingUserIds.length > 0
+          ? await db
+              .select({ userId: userCommunities.userId, communityName: communities.name })
+              .from(userCommunities)
+              .innerJoin(communities, eq(userCommunities.communityId, communities.id))
+              .where(and(inArray(userCommunities.userId, pendingUserIds), eq(userCommunities.status, "ACTIVE")))
+          : [];
+
+      const communitiesByUser = new Map<string, string[]>();
+      for (const m of activeMemberships) {
+        const arr = communitiesByUser.get(m.userId) ?? [];
+        arr.push(m.communityName);
+        communitiesByUser.set(m.userId, arr);
+      }
+
+      // Format response to match expected frontend structure but include join mapping and communities
+      const formattedUsers = pendingRequests.map((r) => ({
         ...r.user,
         userCommunityId: r.userCommunityId,
         joinStatus: r.joinStatus,
+        communities: communitiesByUser.get(r.user.id) ?? [],
       }));
 
       res.status(200).json(formattedUsers);

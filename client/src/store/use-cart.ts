@@ -21,10 +21,13 @@ export type CartItem = {
 
 interface CartState {
   items: CartItem[];
+  userId: string | null;
   addItem: (item: Omit<CartItem, "id">) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
+  /** Clears cart if it belonged to a different user; call when user logs in/out */
+  ensureUserCart: (userId: string | null) => void;
 }
 
 function generateId() {
@@ -35,6 +38,7 @@ export const useCartStore = create<CartState>()(
   persist(
     (set) => ({
       items: [],
+      userId: null,
       addItem: (item) =>
         set((state) => ({
           items: [...state.items, { ...item, id: generateId() }],
@@ -49,8 +53,13 @@ export const useCartStore = create<CartState>()(
             i.id === id ? { ...i, quantity: Math.max(1, quantity) } : i
           ),
         })),
-      clearCart: () => set({ items: [] }),
+      clearCart: () => set({ items: [], userId: null }),
+      ensureUserCart: (userId) =>
+        set((state) => {
+          if (state.userId === userId) return state;
+          return { items: [], userId: userId ?? null };
+        }),
     }),
-    { name: "nexus-cart" }
+    { name: "nexus-cart", partialize: (s) => ({ items: s.items, userId: s.userId }) }
   )
 );

@@ -206,6 +206,7 @@ export default function AdminUsers() {
                                 <thead className="bg-[#f8fafc] text-slate-500 uppercase text-[10px] font-bold tracking-wider">
                                     <tr>
                                         <th className="px-6 py-4 font-bold border-b">User Profile</th>
+                                        <th className="px-6 py-4 font-bold border-b">Phone</th>
                                         <th className="px-6 py-4 font-bold border-b">Communities</th>
                                         <th className="px-6 py-4 font-bold border-b">Primary Community</th>
                                         <th className="px-6 py-4 font-bold border-b">Location</th>
@@ -222,6 +223,9 @@ export default function AdminUsers() {
                                             <td className="px-6 py-4">
                                                 <div className="font-bold text-slate-900">{user.fullName}</div>
                                                 <div className="text-slate-500 text-xs font-medium">{user.email}</div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <p className="text-slate-600 font-medium">{user.phone || "—"}</p>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <UserCommunitiesCell userId={user.id} />

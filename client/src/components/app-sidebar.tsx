@@ -39,7 +39,7 @@ import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/store/use-auth";
 import { useLogout } from "@/hooks/use-auth-api";
 import { useAdminSettings } from "@/hooks/use-admin";
-import { useCommunities, useUserCommunities, usePendingInvites } from "@/hooks/use-communities";
+import { useCommunities, useUserCommunities, usePendingInvites, useHasApprovedAccess } from "@/hooks/use-communities";
 import { useUpdateUser } from "@/hooks/use-users";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link, useLocation } from "wouter";
@@ -56,6 +56,7 @@ export function AppSidebar() {
   const { data: communities } = useCommunities();
   const { data: userCommunitiesData = [] } = useUserCommunities(user?.id ?? "");
   const { data: pendingInvites = [] } = usePendingInvites();
+  const { hasApprovedAccess } = useHasApprovedAccess();
   const updateUser = useUpdateUser();
   const userCommunity = communities?.find(c => c.id === user?.communityId);
   const activeMemberships = userCommunitiesData
@@ -75,17 +76,17 @@ export function AppSidebar() {
 
   const navigationItems = [
     { title: "Home", url: "/", icon: LayoutDashboard },
-    { title: "Community Chat", url: "/forum", icon: MessageSquare },
-    ...(viewMode === "BUYER" ? [{ title: "My Activity", url: "/activity", icon: Calendar }] : []),
-    ...(showResidentNav ? [
+    ...(hasApprovedAccess ? [{ title: "Community Chat", url: "/forum", icon: MessageSquare }] : []),
+    ...(hasApprovedAccess && viewMode === "BUYER" ? [{ title: "My Activity", url: "/activity", icon: Calendar }] : []),
+    ...(showResidentNav && hasApprovedAccess ? [
       { title: "Cart", url: "/cart", icon: ShoppingCart },
       { title: "Orders", url: "/orders", icon: Receipt },
     ] : []),
-    ...(showResidentNav && viewMode === "BUYER" ? [] : [
+    ...(showResidentNav && hasApprovedAccess && viewMode === "BUYER" ? [] : showResidentNav && hasApprovedAccess ? [
       { title: "My Services", url: "/my-services", icon: Wrench },
       { title: "My Products", url: "/my-products", icon: Package },
       { title: "Accept Payments", url: "/accept-payments", icon: Wallet },
-    ]),
+    ] : []),
   ];
 
   const marketplaceItems = [
@@ -315,6 +316,7 @@ export function AppSidebar() {
               </SidebarGroupContent>
             </SidebarGroup>
 
+            {hasApprovedAccess && (
             <SidebarGroup>
               <SidebarGroupLabel className="px-6 text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 mt-4">Marketplace</SidebarGroupLabel>
               <SidebarGroupContent className="px-2">
@@ -332,9 +334,10 @@ export function AppSidebar() {
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
+            )}
 
             {/* Sub-communities: only those user is a member of */}
-            {user.communityId && (() => {
+            {hasApprovedAccess && user.communityId && (() => {
               const subsOfParent = communities?.filter(c => c.parentId === user.communityId) ?? [];
               const memberSubIds = new Set(
                 (userCommunitiesData ?? [])

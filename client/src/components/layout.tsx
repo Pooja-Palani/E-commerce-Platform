@@ -1,12 +1,17 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { useAuthStore } from "@/store/use-auth";
+import { useCartStore } from "@/store/use-cart";
 import { Redirect } from "wouter";
 
 export function Layout({ children }: { children: ReactNode }) {
   const user = useAuthStore((state) => state.user);
-  
+
+  useEffect(() => {
+    useCartStore.getState().ensureUserCart(user?.id ?? null);
+  }, [user?.id]);
+
   if (!user) {
     return <Redirect to="/login" />;
   }

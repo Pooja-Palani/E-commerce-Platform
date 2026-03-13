@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "./hooks/use-auth-api";
+import { useHasApprovedAccess } from "./hooks/use-communities";
 import { LoadingSpinner } from "./components/ui/loading-spinner";
 import { useAuthStore } from "./store/use-auth";
 import { Redirect } from "wouter";
@@ -62,6 +63,23 @@ function ProtectedRoute({ component: Component, ...rest }: { component: React.Co
   return <Route {...rest} component={Component} />;
 }
 
+/** Protects marketplace routes: redirects to / when user has no ACTIVE community (e.g. PENDING or not joined). */
+function ApprovedResidentRoute({ component: Component, ...rest }: { component: React.ComponentType<any>; path: string }) {
+  const { user } = useAuthStore();
+  const { hasApprovedAccess, isLoading } = useHasApprovedAccess();
+
+  if (!user) return <Redirect to="/login" />;
+  if (isLoading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-background">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+  if (!hasApprovedAccess) return <Redirect to="/" />;
+  return <Route {...rest} component={Component} />;
+}
+
 function Router() {
   const { isLoading } = useAuth();
 
@@ -74,28 +92,27 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <ProtectedRoute path="/" component={Dashboard} />
-      <ProtectedRoute path="/activity" component={MyActivity} />
-      <ProtectedRoute path="/my-services" component={MyServices} />
-      <ProtectedRoute path="/my-products" component={MyProducts} />
-      {/* Listing create/edit flows */}
-      <ProtectedRoute path="/list-service/:id" component={ListService} />
-      <ProtectedRoute path="/list-service" component={ListService} />
-      <ProtectedRoute path="/list-product/:id" component={ListProduct} />
-      <ProtectedRoute path="/list-product" component={ListProduct} />
-      <ProtectedRoute path="/cart" component={Cart} />
-      <ProtectedRoute path="/orders" component={Orders} />
-      <ProtectedRoute path="/services" component={ServicesMarketplace} />
-      <ProtectedRoute path="/products" component={ProductsMarketplace} />
       <ProtectedRoute path="/profile" component={Profile} />
-      <ProtectedRoute path="/subcommunities" component={Subcommunities} />
-      <ProtectedRoute path="/accept-payments" component={AcceptPayments} />
-      <ProtectedRoute path="/forum" component={Forum} />
-      <ProtectedRoute path="/forum/post/:id" component={PostDetail} />
-      <ProtectedRoute path="/community" component={CommunityMarketplace} />
-      <ProtectedRoute path="/communities/:id" component={CommunityMarketplace} />
-      <ProtectedRoute path="/listings/:id" component={ListingDetail} />
-      <ProtectedRoute path="/global" component={GlobalMarketplace} />
-      <ProtectedRoute path="/seller" component={SellerListings} />
+      <ApprovedResidentRoute path="/activity" component={MyActivity} />
+      <ApprovedResidentRoute path="/my-services" component={MyServices} />
+      <ApprovedResidentRoute path="/my-products" component={MyProducts} />
+      <ApprovedResidentRoute path="/list-service/:id" component={ListService} />
+      <ApprovedResidentRoute path="/list-service" component={ListService} />
+      <ApprovedResidentRoute path="/list-product/:id" component={ListProduct} />
+      <ApprovedResidentRoute path="/list-product" component={ListProduct} />
+      <ApprovedResidentRoute path="/cart" component={Cart} />
+      <ApprovedResidentRoute path="/orders" component={Orders} />
+      <ApprovedResidentRoute path="/services" component={ServicesMarketplace} />
+      <ApprovedResidentRoute path="/products" component={ProductsMarketplace} />
+      <ApprovedResidentRoute path="/subcommunities" component={Subcommunities} />
+      <ApprovedResidentRoute path="/accept-payments" component={AcceptPayments} />
+      <ApprovedResidentRoute path="/forum" component={Forum} />
+      <ApprovedResidentRoute path="/forum/post/:id" component={PostDetail} />
+      <ApprovedResidentRoute path="/community" component={CommunityMarketplace} />
+      <ApprovedResidentRoute path="/communities/:id" component={CommunityMarketplace} />
+      <ApprovedResidentRoute path="/listings/:id" component={ListingDetail} />
+      <ApprovedResidentRoute path="/global" component={GlobalMarketplace} />
+      <ApprovedResidentRoute path="/seller" component={SellerListings} />
       <ProtectedRoute path="/manager" component={ManagerDashboard} />
       <ProtectedRoute path="/manager/approvals" component={ManagerApprovals} />
       <ProtectedRoute path="/manager/services" component={ManagerServices} />

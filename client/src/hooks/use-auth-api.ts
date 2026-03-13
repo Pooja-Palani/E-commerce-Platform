@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { LoginRequest, RegisterRequest } from "@shared/schema";
 import { useAuthStore } from "@/store/use-auth";
+import { useCartStore } from "@/store/use-cart";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { getErrorMessage } from "@/lib/api-error";
@@ -159,6 +160,7 @@ export function useLogout() {
     onSuccess: () => {
       queryClient.setQueryData([api.auth.me.path], null);
       useAuthStore.getState().setUser(null);
+      useCartStore.getState().clearCart();
       setLocation("/login");
     }
   });

@@ -127,7 +127,12 @@ export default function ManagerApprovals() {
                                         <div>
                                             <p className="font-bold text-slate-900 text-lg">{user.fullName}</p>
                                             <p className="text-sm font-medium text-slate-500">{user.email}</p>
-                                            <p className="text-xs text-slate-400 mt-1">Joined: {new Date(user.createdAt!).toLocaleDateString()}</p>
+                                            {user.phone && <p className="text-sm font-medium text-slate-500">Phone: {user.phone}</p>}
+                                            {user.locality && <p className="text-xs text-slate-400">Locality: {user.locality}</p>}
+                                            <p className="text-xs text-slate-400 mt-0.5">
+                                                Communities: {user.communities?.length ? user.communities.join(", ") : "None (new user)"}
+                                            </p>
+                                            <p className="text-xs text-slate-400 mt-1">Requested: {new Date(user.createdAt!).toLocaleDateString()}</p>
                                         </div>
                                         <div className="flex gap-3 mt-4 sm:mt-0">
                                             <Button
