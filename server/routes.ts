@@ -191,11 +191,24 @@ export async function registerRoutes(
       const user = await storage.getUser(decoded.userId);
       if (!user) return res.status(401).json({ message: "User not found" });
 
-      // Allow PENDING users to access community list/join and self-identity routes for onboarding
+      // PENDING users can access read-only routes needed for the UI to render.
+      // Individual route handlers already return empty/limited data for PENDING users.
+      const selfCommunitiesMatch = req.path.match(/^\/api\/users\/([^/]+)\/communities$/);
+      const isSelfCommunities = selfCommunitiesMatch && selfCommunitiesMatch[1] === user.id;
+      const isReadOnly = req.method === "GET";
       const isAllowedForPending =
         req.path === api.auth.me.path ||
         req.path === api.communities.list.path ||
-        (req.path.startsWith("/api/communities/") && req.path.endsWith("/join"));
+        (req.path.startsWith("/api/communities/") && req.path.endsWith("/join")) ||
+        req.path.match(/^\/api\/invites(\/[^/]+\/(accept|decline))?$/) ||
+        (isReadOnly && (
+          req.path === api.listings.list.path ||
+          isSelfCommunities ||
+          req.path === "/api/admin/settings" ||
+          req.path.match(/^\/api\/communities\/[^/]+\/posts$/) ||
+          req.path === "/api/seller/orders" ||
+          req.path === "/api/my-listings"
+        ));
 
       if (user.status === "PENDING" && user.role !== "ADMIN" && !isAllowedForPending) {
         return res.status(403).json({ message: "Your account is pending approval by a community manager." });
