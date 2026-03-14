@@ -5,11 +5,13 @@ import { useForumPosts, useCreatePost } from "@/hooks/use-forum";
 import { useListings } from "@/hooks/use-listings";
 import { useCommunities } from "@/hooks/use-communities";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MessageSquare, Send, User as UserIcon, ShoppingBag, Wrench, Mail, Phone } from "lucide-react";
+import { MessageSquare, Send, User as UserIcon, ShoppingBag, Wrench, Mail, Phone, AlertCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
     Select,
     SelectContent,
@@ -21,6 +23,7 @@ import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function Forum() {
+    const { toast } = useToast();
     const user = useAuthStore(s => s.user!);
     const { data: communities } = useCommunities();
     const { data: listings } = useListings();
@@ -72,6 +75,14 @@ export default function Forum() {
     };
 
     if (isLoading) return <Layout><LoadingSpinner /></Layout>;
+
+    if (createPostMutation.isError) {
+        toast({
+            title: "Post failed",
+            description: createPostMutation.error.message,
+            variant: "destructive"
+        });
+    }
 
     return (
         <Layout>

@@ -1523,10 +1523,10 @@ export async function registerRoutes(
       const activeMemberships =
         pendingUserIds.length > 0
           ? await db
-              .select({ userId: userCommunities.userId, communityName: communities.name })
-              .from(userCommunities)
-              .innerJoin(communities, eq(userCommunities.communityId, communities.id))
-              .where(and(inArray(userCommunities.userId, pendingUserIds), eq(userCommunities.status, "ACTIVE")))
+            .select({ userId: userCommunities.userId, communityName: communities.name })
+            .from(userCommunities)
+            .innerJoin(communities, eq(userCommunities.communityId, communities.id))
+            .where(and(inArray(userCommunities.userId, pendingUserIds), eq(userCommunities.status, "ACTIVE")))
           : [];
 
       const communitiesByUser = new Map<string, string[]>();
@@ -1566,8 +1566,13 @@ export async function registerRoutes(
       await storage.updateUserCommunity(userCommunityId, 'ACTIVE');
 
       const targetUser = await storage.getUser(uc.userId);
-      if (targetUser && targetUser.communityId === uc.communityId) {
-        await storage.updateUser(targetUser.id, { status: 'ACTIVE', version: targetUser.version });
+      if (targetUser) {
+        const updates: any = { status: 'ACTIVE', version: targetUser.version };
+        // If user doesn't have a primary community, assign this one
+        if (!targetUser.communityId) {
+          updates.communityId = uc.communityId;
+        }
+        await storage.updateUser(targetUser.id, updates);
       }
 
       res.status(200).json({ message: "Approved successfully" });
