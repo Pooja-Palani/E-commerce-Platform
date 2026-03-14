@@ -40,7 +40,7 @@ export default function Login() {
         <div className="flex justify-center mb-8">
           <div className="flex items-center gap-3 font-bold text-3xl tracking-tight text-primary">
             <ShoppingBag className="w-8 h-8" />
-            NexusMarket
+            QvantoMarket
           </div>
         </div>
         <Card className="border-border/50 shadow-xl shadow-black/5">
@@ -55,61 +55,61 @@ export default function Login() {
             </div>
 
             {mode === "password" && (
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit((d) => login.mutate(d))} className="space-y-4">
-                {login.isError && (
-                  <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
-                    {login.error?.message}
-                  </div>
-                )}
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email <RequiredAsterisk /></FormLabel>
-                      <FormControl>
-                        <Input placeholder="name@example.com" type="email" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit((d) => login.mutate(d))} className="space-y-4">
+                  {login.isError && (
+                    <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
+                      {login.error?.message}
+                    </div>
                   )}
-                />
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Password <RequiredAsterisk /></FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <Input
-                            type={showPassword ? "text" : "password"}
-                            placeholder="••••••••"
-                            className="pr-9"
-                            {...field}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                            aria-label={showPassword ? "Hide password" : "Show password"}
-                            onClick={() => setShowPassword((p) => !p)}
-                          >
-                            {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
-                          </Button>
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" className="w-full" disabled={login.isPending}>
-                  {login.isPending ? "Signing in..." : "Sign in"}
-                </Button>
-              </form>
-            </Form>
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email <RequiredAsterisk /></FormLabel>
+                        <FormControl>
+                          <Input placeholder="name@example.com" type="email" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password <RequiredAsterisk /></FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input
+                              type={showPassword ? "text" : "password"}
+                              placeholder="••••••••"
+                              className="pr-9"
+                              {...field}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                              aria-label={showPassword ? "Hide password" : "Show password"}
+                              onClick={() => setShowPassword((p) => !p)}
+                            >
+                              {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                            </Button>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" className="w-full" disabled={login.isPending}>
+                    {login.isPending ? "Signing in..." : "Sign in"}
+                  </Button>
+                </form>
+              </Form>
             )}
 
             {mode === "otp" && (

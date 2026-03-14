@@ -205,8 +205,8 @@ export const comments = pgTable("comments", {
 
 export const platformSettings = pgTable("platform_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  platformName: text("platform_name").notNull().default("Nexus Market"),
-  supportEmail: text("support_email").notNull().default("support@nexusmarket.com"),
+  platformName: text("platform_name").notNull().default("Qvanto Market"),
+  supportEmail: text("support_email").notNull().default("support@qvantomarket.com"),
   commissionRate: integer("commission_rate").notNull().default(5),
   enableRegistration: boolean("enable_registration").notNull().default(true),
   enableGlobalMarketplace: boolean("enable_global_marketplace").notNull().default(true),
@@ -215,7 +215,7 @@ export const platformSettings = pgTable("platform_settings", {
   require2FA: boolean("require_2fa").notNull().default(false),
   sessionTimeout: integer("session_timeout").notNull().default(24),
   emailAlerts: boolean("email_alerts").notNull().default(true),
-  welcomeEmailSubject: text("welcome_email_subject").notNull().default("Welcome to Nexus Market!"),
+  welcomeEmailSubject: text("welcome_email_subject").notNull().default("Welcome to Qvanto Market!"),
   autoBackupFrequency: text("auto_backup_frequency").notNull().default("daily"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

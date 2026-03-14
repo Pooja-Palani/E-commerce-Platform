@@ -113,7 +113,7 @@ export function AppSidebar() {
                 <ShoppingBag className="w-5 h-5" />
               </div>
               <div className="flex flex-col leading-tight">
-                <span className="text-lg font-bold">{settings?.platformName || "Nexus Market"}</span>
+                <span className="text-lg font-bold">{settings?.platformName || "Qvanto Market"}</span>
                 <span className="text-xs font-medium text-muted-foreground capitalize">{user.role.toLowerCase().replace('_', ' ')}</span>
               </div>
             </div>
@@ -126,26 +126,26 @@ export function AppSidebar() {
               )}
             </div>
             {userCommunitiesList.length > 0 ? (
-                <Select
-                  value={currentCommunityId || (userCommunitiesList[0]?.id ?? "")}
-                  onValueChange={(value) => {
-                    if (value && user && value !== user.communityId) {
-                      updateUser.mutate({ id: user.id, data: { communityId: value, version: user.version } });
-                    }
-                  }}
-                  disabled={updateUser.isPending}
-                >
-                  <SelectTrigger className="h-9 w-full font-bold text-primary border-primary/20 bg-background/80">
-                    <SelectValue placeholder="Choose community" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {userCommunitiesList.map((c: { id: string; name: string }) => (
-                      <SelectItem key={c.id} value={c.id} className="font-medium">
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <Select
+                value={currentCommunityId || (userCommunitiesList[0]?.id ?? "")}
+                onValueChange={(value) => {
+                  if (value && user && value !== user.communityId) {
+                    updateUser.mutate({ id: user.id, data: { communityId: value, version: user.version } });
+                  }
+                }}
+                disabled={updateUser.isPending}
+              >
+                <SelectTrigger className="h-9 w-full font-bold text-primary border-primary/20 bg-background/80">
+                  <SelectValue placeholder="Choose community" />
+                </SelectTrigger>
+                <SelectContent>
+                  {userCommunitiesList.map((c: { id: string; name: string }) => (
+                    <SelectItem key={c.id} value={c.id} className="font-medium">
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             ) : (
               <p className="text-sm font-bold text-primary truncate">
                 {user.communityId ? userCommunity?.name || "Loading..." : "No Community Joined"}
@@ -248,53 +248,53 @@ export function AppSidebar() {
           </SidebarGroup>
         ) : user.role === "COMMUNITY_MANAGER" && !useAsUser ? (
           <>
-          <SidebarGroup>
-            <SidebarGroupLabel className="px-6 text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mb-2">Navigation</SidebarGroupLabel>
-            <SidebarGroupContent className="px-2">
-              <SidebarMenu>
-                {[
-                  { title: "Dashboard", url: "/manager", icon: LayoutDashboard },
-                  { title: "Community Chat", url: "/forum", icon: MessageSquare },
-                  { title: "Approvals", url: "/manager/approvals", icon: Shield },
-                  { title: "Services", url: "/manager/services", icon: Wrench },
-                  { title: "Products", url: "/manager/products", icon: Package },
-                  { title: "Members", url: "/manager/members", icon: Users },
-                ].map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={location === item.url} className="px-4 py-2 hover:bg-primary/5 transition-colors group">
-                      <Link href={item.url} className="flex items-center gap-3 w-full">
-                        <item.icon className={`w-4 h-4 transition-colors ${location === item.url ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'}`} />
-                        <span className={`text-sm font-medium ${location === item.url ? 'text-primary font-bold' : 'text-muted-foreground/90 group-hover:text-primary'}`}>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-          <SidebarGroup>
-            <SidebarGroupLabel className="px-6 text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 mt-4">Marketplace</SidebarGroupLabel>
-            <SidebarGroupContent className="px-2">
-              <SidebarMenu>
-                {[
-                  { title: "Browse Services", url: "/services", icon: Wrench },
-                  { title: "Browse Products", url: "/products", icon: ShoppingBag },
-                  { title: "My Services", url: "/my-services", icon: Package },
-                  { title: "My Products", url: "/my-products", icon: Package },
-                  { title: "Accept Payments", url: "/accept-payments", icon: Wallet },
-                ].map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={location === item.url} className="px-4 py-2 hover:bg-primary/5 transition-colors group">
-                      <Link href={item.url} className="flex items-center gap-3 w-full">
-                        <item.icon className={`w-4 h-4 transition-colors ${location === item.url ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'}`} />
-                        <span className={`text-sm font-medium ${location === item.url ? 'text-primary font-bold' : 'text-muted-foreground/90 group-hover:text-primary'}`}>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+            <SidebarGroup>
+              <SidebarGroupLabel className="px-6 text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mb-2">Navigation</SidebarGroupLabel>
+              <SidebarGroupContent className="px-2">
+                <SidebarMenu>
+                  {[
+                    { title: "Dashboard", url: "/manager", icon: LayoutDashboard },
+                    { title: "Community Chat", url: "/forum", icon: MessageSquare },
+                    { title: "Approvals", url: "/manager/approvals", icon: Shield },
+                    { title: "Services", url: "/manager/services", icon: Wrench },
+                    { title: "Products", url: "/manager/products", icon: Package },
+                    { title: "Members", url: "/manager/members", icon: Users },
+                  ].map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild isActive={location === item.url} className="px-4 py-2 hover:bg-primary/5 transition-colors group">
+                        <Link href={item.url} className="flex items-center gap-3 w-full">
+                          <item.icon className={`w-4 h-4 transition-colors ${location === item.url ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'}`} />
+                          <span className={`text-sm font-medium ${location === item.url ? 'text-primary font-bold' : 'text-muted-foreground/90 group-hover:text-primary'}`}>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+            <SidebarGroup>
+              <SidebarGroupLabel className="px-6 text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 mt-4">Marketplace</SidebarGroupLabel>
+              <SidebarGroupContent className="px-2">
+                <SidebarMenu>
+                  {[
+                    { title: "Browse Services", url: "/services", icon: Wrench },
+                    { title: "Browse Products", url: "/products", icon: ShoppingBag },
+                    { title: "My Services", url: "/my-services", icon: Package },
+                    { title: "My Products", url: "/my-products", icon: Package },
+                    { title: "Accept Payments", url: "/accept-payments", icon: Wallet },
+                  ].map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild isActive={location === item.url} className="px-4 py-2 hover:bg-primary/5 transition-colors group">
+                        <Link href={item.url} className="flex items-center gap-3 w-full">
+                          <item.icon className={`w-4 h-4 transition-colors ${location === item.url ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'}`} />
+                          <span className={`text-sm font-medium ${location === item.url ? 'text-primary font-bold' : 'text-muted-foreground/90 group-hover:text-primary'}`}>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
           </>
         ) : (
           <>
@@ -317,23 +317,23 @@ export function AppSidebar() {
             </SidebarGroup>
 
             {hasApprovedAccess && (
-            <SidebarGroup>
-              <SidebarGroupLabel className="px-6 text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 mt-4">Marketplace</SidebarGroupLabel>
-              <SidebarGroupContent className="px-2">
-                <SidebarMenu>
-                  {marketplaceItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild isActive={location === item.url} className="px-4 py-2 hover:bg-primary/5 transition-colors group">
-                        <Link href={item.url} className="flex items-center gap-3 w-full">
-                          <item.icon className={`w-4 h-4 transition-colors ${location === item.url ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'}`} />
-                          <span className={`text-sm font-medium ${location === item.url ? 'text-primary font-bold' : 'text-muted-foreground/90 group-hover:text-primary'}`}>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+              <SidebarGroup>
+                <SidebarGroupLabel className="px-6 text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 mt-4">Marketplace</SidebarGroupLabel>
+                <SidebarGroupContent className="px-2">
+                  <SidebarMenu>
+                    {marketplaceItems.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton asChild isActive={location === item.url} className="px-4 py-2 hover:bg-primary/5 transition-colors group">
+                          <Link href={item.url} className="flex items-center gap-3 w-full">
+                            <item.icon className={`w-4 h-4 transition-colors ${location === item.url ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'}`} />
+                            <span className={`text-sm font-medium ${location === item.url ? 'text-primary font-bold' : 'text-muted-foreground/90 group-hover:text-primary'}`}>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
             )}
 
             {/* Sub-communities: only those user is a member of */}
@@ -346,24 +346,24 @@ export function AppSidebar() {
               );
               const visibleSubs = subsOfParent.filter(sub => memberSubIds.has(sub.id));
               return visibleSubs.length > 0 && (
-              <SidebarGroup>
-                <SidebarGroupLabel className="px-6 text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 mt-4">Sub-Communities</SidebarGroupLabel>
-                <SidebarGroupContent className="px-2">
-                  <SidebarMenu>
-                    {visibleSubs.map((sub) => (
-                      <SidebarMenuItem key={sub.id}>
-                        <SidebarMenuButton asChild className="px-4 py-2 hover:bg-primary/5 transition-colors group">
-                          <Link href={`/communities/${sub.id}`} className="flex items-center gap-3 w-full">
-                            <Building2 className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
-                            <span className="text-sm font-medium text-muted-foreground/90 group-hover:text-primary">{sub.name}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            );
+                <SidebarGroup>
+                  <SidebarGroupLabel className="px-6 text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 mt-4">Sub-Communities</SidebarGroupLabel>
+                  <SidebarGroupContent className="px-2">
+                    <SidebarMenu>
+                      {visibleSubs.map((sub) => (
+                        <SidebarMenuItem key={sub.id}>
+                          <SidebarMenuButton asChild className="px-4 py-2 hover:bg-primary/5 transition-colors group">
+                            <Link href={`/communities/${sub.id}`} className="flex items-center gap-3 w-full">
+                              <Building2 className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
+                              <span className="text-sm font-medium text-muted-foreground/90 group-hover:text-primary">{sub.name}</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ))}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              );
             })()}
           </>
         )}

@@ -1,4 +1,4 @@
-# Nexus Market — App Flow & User Manual (Demo)
+# Qvanto Market — App Flow & User Manual (Demo)
 
 This document describes the full application flow for **user manuals** and **demo purposes**. Use it for onboarding, training, or walking stakeholders through the platform.
 
@@ -6,7 +6,7 @@ This document describes the full application flow for **user manuals** and **dem
 
 ## 1. App Overview
 
-**Nexus Market** is a community-focused e-commerce platform where:
+**Qvanto Market** is a community-focused e-commerce platform where:
 
 - **Residents** browse and buy products/services from their community, sell their own, and chat with neighbors.
 - **Community Managers** oversee a community: approve members, manage listings, and invite members.
@@ -324,4 +324,4 @@ Admins see **Platform Admin** in sidebar: Dashboard, Communities, Users, Analyti
 
 ---
 
-*Document version: 1.0 — for Nexus Market app flow, user manual, and demo purposes.*
+*Document version: 1.0 — for Qvanto Market app flow, user manual, and demo purposes.*

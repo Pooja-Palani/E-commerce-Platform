@@ -176,8 +176,8 @@ async function main() {
       await client.query(`
         CREATE TABLE platform_settings (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::text,
-          platform_name TEXT NOT NULL DEFAULT 'Nexus Market',
-          support_email TEXT NOT NULL DEFAULT 'support@nexusmarket.com',
+          platform_name TEXT NOT NULL DEFAULT 'Qvanto Market',
+          support_email TEXT NOT NULL DEFAULT 'support@qvantomarket.com',
           commission_rate INTEGER NOT NULL DEFAULT 5,
           enable_registration BOOLEAN NOT NULL DEFAULT true,
           enable_global_marketplace BOOLEAN NOT NULL DEFAULT true,
@@ -186,7 +186,7 @@ async function main() {
           require_2fa BOOLEAN NOT NULL DEFAULT false,
           session_timeout INTEGER NOT NULL DEFAULT 24,
           email_alerts BOOLEAN NOT NULL DEFAULT true,
-          welcome_email_subject TEXT NOT NULL DEFAULT 'Welcome to Nexus Market!',
+          welcome_email_subject TEXT NOT NULL DEFAULT 'Welcome to Qvanto Market!',
           auto_backup_frequency TEXT NOT NULL DEFAULT 'daily',
           updated_at TIMESTAMP DEFAULT NOW() NOT NULL
         )

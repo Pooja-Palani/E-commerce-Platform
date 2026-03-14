@@ -60,6 +60,6 @@ export const useCartStore = create<CartState>()(
           return { items: [], userId: userId ?? null };
         }),
     }),
-    { name: "nexus-cart", partialize: (s) => ({ items: s.items, userId: s.userId }) }
+    { name: "qvanto-cart", partialize: (s) => ({ items: s.items, userId: s.userId }) }
   )
 );

@@ -25,6 +25,6 @@ export const useAuthStore = create<AuthState>()(
       setViewMode: (viewMode) => set({ viewMode }),
       setUseAsUser: (useAsUser) => set({ useAsUser }),
     }),
-    { name: 'nexus-auth', partialize: (s) => ({ useAsUser: s.useAsUser }) }
+    { name: 'qvanto-auth', partialize: (s) => ({ useAsUser: s.useAsUser }) }
   )
 );

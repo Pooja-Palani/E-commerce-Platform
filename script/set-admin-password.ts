@@ -1,7 +1,7 @@
 /**
  * One-off script to set a user's password (e.g. when the stored hash doesn't match).
  * Usage: npx tsx script/set-admin-password.ts [email] [newPassword]
- * Example: npx tsx script/set-admin-password.ts admin@nexusmarket.com Theepakk123
+ * Example: npx tsx script/set-admin-password.ts admin@qvantomarket.com Theepakk123
  */
 import "dotenv/config";
 import bcrypt from "bcryptjs";
@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../server/db";
 import { users } from "@shared/schema";
 
-const email = process.argv[2]?.trim().toLowerCase() || "admin@nexusmarket.com";
+const email = process.argv[2]?.trim().toLowerCase() || "admin@qvantomarket.com";
 const newPassword = process.argv[3] || "Theepakk123";
 
 async function main() {

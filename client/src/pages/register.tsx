@@ -72,7 +72,7 @@ export default function Register() {
                         <FormItem>
                           <FormLabel>Email <RequiredAsterisk /></FormLabel>
                           <FormControl>
-                            <Input placeholder="arun@nexusmarket.in" type="email" {...field} />
+                            <Input placeholder="arun@qvantomarket.in" type="email" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
