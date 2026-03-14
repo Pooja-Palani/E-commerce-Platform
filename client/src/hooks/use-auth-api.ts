@@ -92,8 +92,8 @@ export function useRegister() {
     onSuccess: (user) => {
       queryClient.setQueryData([api.auth.me.path], user);
       useAuthStore.getState().setUser(user);
-      setLocation("/");
-      toast({ title: "Account created", description: `Welcome, ${user.fullName}!` });
+      setLocation("/onboarding/communities");
+      toast({ title: "Account created", description: `Welcome, ${user.fullName}! Let's find your community.` });
     },
     onError: (err: Error) => {
       toast({ title: "Registration Failed", description: err.message, variant: "destructive" });

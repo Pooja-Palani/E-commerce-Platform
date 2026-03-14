@@ -191,7 +191,13 @@ export async function registerRoutes(
       const user = await storage.getUser(decoded.userId);
       if (!user) return res.status(401).json({ message: "User not found" });
 
-      if (user.status === "PENDING" && user.role !== "ADMIN") {
+      // Allow PENDING users to access community list/join and self-identity routes for onboarding
+      const isAllowedForPending =
+        req.path === api.auth.me.path ||
+        req.path === api.communities.list.path ||
+        (req.path.startsWith("/api/communities/") && req.path.endsWith("/join"));
+
+      if (user.status === "PENDING" && user.role !== "ADMIN" && !isAllowedForPending) {
         return res.status(403).json({ message: "Your account is pending approval by a community manager." });
       }
 

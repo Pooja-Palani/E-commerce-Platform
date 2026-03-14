@@ -44,6 +44,7 @@ import PostDetail from "./pages/post-detail";
 import ListingDetail from "./pages/listing-detail";
 import AcceptPayments from "./pages/accept-payments";
 import Orders from "./pages/orders";
+import OnboardingCommunities from "./pages/onboarding-communities";
 
 function ProtectedRoute({ component: Component, ...rest }: { component: React.ComponentType<any>, path: string }) {
   const { user, isLoading } = useAuthStore();
@@ -123,6 +124,7 @@ function Router() {
       <ProtectedRoute path="/admin/communities" component={AdminCommunities} />
       <ProtectedRoute path="/admin/analytics" component={AdminAnalytics} />
       <ProtectedRoute path="/admin/settings" component={AdminSettings} />
+      <ProtectedRoute path="/onboarding/communities" component={OnboardingCommunities} />
       <Route component={NotFound} />
     </Switch>
   );
