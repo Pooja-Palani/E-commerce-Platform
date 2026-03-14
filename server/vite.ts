@@ -31,6 +31,10 @@ export async function setupVite(server: Server, app: Express) {
 
   app.use(vite.middlewares);
 
+  // generate a single stable nonce per server start to avoid triggering
+  // Vite full-reloads on every request (was using a new nanoid each time)
+  const indexNonce = nanoid();
+
   app.use("/{*path}", async (req, res, next) => {
     if (req.path.startsWith("/api")) return next();
     const url = req.originalUrl;
@@ -47,7 +51,7 @@ export async function setupVite(server: Server, app: Express) {
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
       template = template.replace(
         `src="/src/main.tsx"`,
-        `src="/src/main.tsx?v=${nanoid()}"`,
+        `src="/src/main.tsx?v=${indexNonce}"`,
       );
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);

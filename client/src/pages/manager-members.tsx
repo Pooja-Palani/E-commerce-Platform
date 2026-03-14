@@ -121,17 +121,40 @@ export default function ManagerMembers() {
                         </td>
                         <td className="px-6 py-4 text-slate-500">{new Date(user.createdAt!).toLocaleDateString()}</td>
                         <td className="px-6 py-4 text-right">
-                          {user.role !== "COMMUNITY_MANAGER" && user.id !== currentUser.id && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8"
-                              onClick={() => removeMember.mutate(user.id)}
-                              disabled={removeMember.isPending}
-                            >
-                              <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
-                            </Button>
-                          )}
+                          {(() => {
+                            const isSelf = user.id === currentUser.id;
+                            if (isSelf) return null;
+                            if (currentUser.role === "ADMIN") {
+                              return (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8"
+                                  onClick={() => removeMember.mutate(user.id)}
+                                  disabled={removeMember.isPending}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
+                                </Button>
+                              );
+                            }
+                            if (currentUser.role === "COMMUNITY_MANAGER") {
+                              // Community managers may only remove non-manager, non-admin users
+                              if (user.role !== "COMMUNITY_MANAGER" && user.role !== "ADMIN") {
+                                return (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8"
+                                    onClick={() => removeMember.mutate(user.id)}
+                                    disabled={removeMember.isPending}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
+                                  </Button>
+                                );
+                              }
+                            }
+                            return null;
+                          })()}
                         </td>
                       </tr>
                     ))}

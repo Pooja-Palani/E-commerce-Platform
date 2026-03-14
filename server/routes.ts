@@ -213,6 +213,23 @@ export async function registerRoutes(
     }
   };
 
+  // Helper to ensure the current user has ACTIVE membership for a community
+  const ensureActiveMembership = async (user: any, communityId: string) => {
+    if (!communityId) return { allowed: false };
+    // Admins can always access
+    if (user.role === "ADMIN") return { allowed: true };
+    // Community managers can access their community
+    if (user.role === "COMMUNITY_MANAGER" && user.communityId === communityId) return { allowed: true };
+    // Residents: pending users should be blocked with a clear message
+    if (user.status === "PENDING") return { allowed: false, pending: true, message: "Your community membership is pending approval. You'll have access once approved." };
+    // Check explicit user_communities table for ACTIVE status
+    const uc = await storage.getUserCommunity(user.id, communityId);
+    if (uc && uc.status === "ACTIVE") return { allowed: true };
+    // Also allow if user's primary community is this and they're ACTIVE
+    if (user.communityId === communityId && user.status === "ACTIVE") return { allowed: true };
+    return { allowed: false };
+  };
+
   app.get(api.communities.list.path, authMiddleware, async (req, res) => {
     const parentId = req.query.parentId as string | undefined;
     const communities = await storage.getCommunities(parentId);
@@ -416,8 +433,16 @@ export async function registerRoutes(
       if (!userId) return res.status(400).json({ message: "userId is required" });
       const targetUser = await storage.getUser(userId);
       if (!targetUser) return res.status(404).json({ message: "User not found" });
+      // Only administrators can remove other community managers or administrators
+      if (targetUser.role === "ADMIN") {
+        if (currentUser.role !== "ADMIN") {
+          return res.status(403).json({ message: "Only administrators can remove administrators" });
+        }
+      }
       if (targetUser.role === "COMMUNITY_MANAGER" && targetUser.communityId === communityId) {
-        return res.status(400).json({ message: "Cannot remove a community manager" });
+        if (currentUser.role !== "ADMIN") {
+          return res.status(403).json({ message: "Only administrators can remove community managers" });
+        }
       }
       if (targetUser.communityId === communityId) {
         await storage.updateUser(userId, { communityId: null, version: targetUser.version });
@@ -585,6 +610,11 @@ export async function registerRoutes(
   // Forum Routes
   app.get(api.communities.posts.list.path, authMiddleware, async (req, res) => {
     try {
+      const check = await ensureActiveMembership(req.user, req.params.id);
+      if (!check.allowed) {
+        if (check.pending) return res.status(403).json({ message: check.message });
+        return res.status(404).json([]);
+      }
       const posts = await storage.getPostsWithAuthors(req.params.id);
       res.status(200).json(posts);
     } catch (err) {
@@ -601,6 +631,11 @@ export async function registerRoutes(
         if (!listing || listing.communityId !== req.params.id) {
           return res.status(400).json({ message: "Invalid listing or listing not in this community" });
         }
+      }
+      const check = await ensureActiveMembership(req.user, req.params.id);
+      if (!check.allowed) {
+        if (check.pending) return res.status(403).json({ message: check.message });
+        return res.status(403).json({ message: "Forbidden" });
       }
       const { listingId, ...rest } = input;
       const post = await storage.createPost({

@@ -15,6 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Textarea } from "@/components/ui/textarea";
 import { insertCommunitySchema, Community } from "@shared/schema";
 import { useState } from "react";
+import { useAuthStore } from "@/store/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
@@ -31,6 +32,7 @@ export default function AdminCommunities() {
     const communityMembers = useCommunityMembers(selectedCommunity?.id);
     const removeMember = useRemoveMemberFromCommunity(selectedCommunity?.id);
     const addMember = useAddMemberToCommunity(selectedCommunity?.id);
+    const currentUser = useAuthStore(s => s.user!);
 
     const form = useForm({
         resolver: zodResolver(insertCommunitySchema),
@@ -112,11 +114,11 @@ export default function AdminCommunities() {
                                     )} />
                                     <div className="grid grid-cols-2 gap-4">
                                         <FormField control={form.control} name="name" render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel className="font-bold text-slate-700">Display Name</FormLabel>
-                                                <FormControl><Input placeholder="e.g. Sristi Greenwoods" className="h-10 border-slate-200" {...field} /></FormControl>
-                                                <FormMessage />
-                                            </FormItem>
+                                                <FormItem>
+                                                    <FormLabel className="font-bold text-slate-700">Community Name</FormLabel>
+                                                    <FormControl><Input placeholder="e.g. Sristi Greenwoods" className="h-10 border-slate-200" {...field} /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
                                         )} />
                                         <FormField control={form.control} name="visibility" render={({ field }) => (
                                             <FormItem>
@@ -305,7 +307,7 @@ export default function AdminCommunities() {
                                         <p className="text-lg font-bold text-emerald-600">Active</p>
                                     </div>
                                     <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-                                        <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Community Admin</h4>
+                                        <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Community Manager</h4>
                                         <p className="text-lg font-bold text-indigo-700">
                                             {users?.find(u => u.communityId === selectedCommunity?.id && u.role === 'COMMUNITY_MANAGER')?.fullName || "null"}
                                         </p>
@@ -382,15 +384,39 @@ export default function AdminCommunities() {
                                                                 <span className="text-slate-500 text-xs ml-2">({member.email})</span>
                                                                 <Badge variant="outline" className="ml-2 text-[10px]">{member.role}</Badge>
                                                             </div>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8"
-                                                                onClick={() => removeMember.mutate(member.id)}
-                                                                disabled={removeMember.isPending}
-                                                            >
-                                                                <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
-                                                            </Button>
+                                                                {(() => {
+                                                                    const isSelf = member.id === currentUser.id;
+                                                                    if (isSelf) return null;
+                                                                    if (currentUser.role === "ADMIN") {
+                                                                        return (
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8"
+                                                                                onClick={() => removeMember.mutate(member.id)}
+                                                                                disabled={removeMember.isPending}
+                                                                            >
+                                                                                <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
+                                                                            </Button>
+                                                                        );
+                                                                    }
+                                                                    if (currentUser.role === "COMMUNITY_MANAGER") {
+                                                                        if (member.role !== "COMMUNITY_MANAGER" && member.role !== "ADMIN") {
+                                                                            return (
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="sm"
+                                                                                    className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8"
+                                                                                    onClick={() => removeMember.mutate(member.id)}
+                                                                                    disabled={removeMember.isPending}
+                                                                                >
+                                                                                    <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
+                                                                                </Button>
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                    return null;
+                                                                })()}
                                                         </li>
                                                     ))
                                                 )}
