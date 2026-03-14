@@ -7,6 +7,14 @@ import pg from "pg";
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
+async function tableExists(client: pg.PoolClient, name: string): Promise<boolean> {
+  const r = await client.query(
+    `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1`,
+    [name]
+  );
+  return r.rows.length > 0;
+}
+
 async function columnExists(client: pg.PoolClient, table: string, column: string): Promise<boolean> {
   const r = await client.query(
     `SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
@@ -30,6 +38,10 @@ async function main() {
     ];
 
     for (const [table, column, type] of toAdd) {
+      if (!(await tableExists(client, table))) {
+        console.log(`Table ${table} does not exist, skipping ${column}`);
+        continue;
+      }
       if (await columnExists(client, table, column)) {
         console.log(`Column ${table}.${column} already exists`);
       } else {

@@ -210,7 +210,7 @@ export async function registerRoutes(
           req.path === "/api/my-listings"
         ));
 
-      if (user.status === "PENDING" && user.role !== "ADMIN" && !isAllowedForPending) {
+      if (user.status === "PENDING" && user.role !== "ADMIN" && user.role !== "COMMUNITY_MANAGER" && !isAllowedForPending) {
         return res.status(403).json({ message: "Your account is pending approval by a community manager." });
       }
 
@@ -621,7 +621,7 @@ export async function registerRoutes(
   });
 
   // Forum Routes
-  app.get(api.communities.posts.list.path, authMiddleware, async (req, res) => {
+  app.get(api.communities.posts.list.path, authMiddleware, async (req: any, res) => {
     try {
       const check = await ensureActiveMembership(req.user, req.params.id);
       if (!check.allowed) {
@@ -954,6 +954,11 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Forbidden" });
       }
 
+      // Promoting to COMMUNITY_MANAGER or ADMIN automatically activates the user
+      if (input.role && (input.role === "COMMUNITY_MANAGER" || input.role === "ADMIN")) {
+        input.status = "ACTIVE";
+      }
+
       const user = await storage.updateUser(targetUserId, input as any);
       if (!user) return res.status(409).json({ message: "Conflict" });
 
@@ -1054,7 +1059,7 @@ export async function registerRoutes(
     const bookings = user.role === "RESIDENT"
       ? await storage.getBookingsByUser(user.id)
       : await storage.getBookingsBySeller(user.id);
-    const listingIds = [...new Set(bookings.map((b: any) => b.listingId))];
+    const listingIds = Array.from(new Set(bookings.map((b: any) => b.listingId)));
     const listingsArr = await storage.getListingsByIds(listingIds);
     const listingsMap: Record<string, any> = {};
     listingsArr.forEach((l: any) => { listingsMap[l.id] = l; });
@@ -1124,7 +1129,7 @@ export async function registerRoutes(
   app.get(api.orders.list.path, authMiddleware, async (req: any, res) => {
     const user = req.user;
     const orders = await storage.getOrdersByUser(user.id);
-    const listingIds = [...new Set(orders.map((o: any) => o.listingId))];
+    const listingIds = Array.from(new Set(orders.map((o: any) => o.listingId)));
     const listingsArr = await storage.getListingsByIds(listingIds);
     const listingsMap: Record<string, any> = {};
     listingsArr.forEach((l: any) => { listingsMap[l.id] = l; });
@@ -1553,7 +1558,7 @@ export async function registerRoutes(
   app.get('/api/manager/approvals', authMiddleware, async (req: any, res) => {
     try {
       const user = req.user;
-      if (user.role !== "COMMUNITY_MANAGER" || !user.communityId) {
+      if (user.role !== "COMMUNITY_MANAGER" && user.role !== "ADMIN") {
         return res.status(403).json({ message: "Forbidden" });
       }
 
@@ -1601,7 +1606,7 @@ export async function registerRoutes(
   app.post('/api/manager/approvals/:id/approve', authMiddleware, async (req: any, res) => {
     try {
       const user = req.user;
-      if (user.role !== "COMMUNITY_MANAGER" || !user.communityId) {
+      if (user.role !== "COMMUNITY_MANAGER" && user.role !== "ADMIN") {
         return res.status(403).json({ message: "Forbidden" });
       }
 
@@ -1632,7 +1637,7 @@ export async function registerRoutes(
   app.post('/api/manager/approvals/:id/reject', authMiddleware, async (req: any, res) => {
     try {
       const user = req.user;
-      if (user.role !== "COMMUNITY_MANAGER" || !user.communityId) {
+      if (user.role !== "COMMUNITY_MANAGER" && user.role !== "ADMIN") {
         return res.status(403).json({ message: "Forbidden" });
       }
 
@@ -1658,7 +1663,7 @@ export async function registerRoutes(
   app.get("/api/manager/pending-listings", authMiddleware, async (req: any, res) => {
     try {
       const user = req.user;
-      if (user.role !== "COMMUNITY_MANAGER" || !user.communityId) {
+      if (user.role !== "COMMUNITY_MANAGER" && user.role !== "ADMIN") {
         return res.status(403).json({ message: "Forbidden" });
       }
       const pending = await storage.getPendingListings(user.communityId);
@@ -1671,7 +1676,7 @@ export async function registerRoutes(
   app.post("/api/manager/listings/:id/approve", authMiddleware, async (req: any, res) => {
     try {
       const user = req.user;
-      if (user.role !== "COMMUNITY_MANAGER" || !user.communityId) {
+      if (user.role !== "COMMUNITY_MANAGER" && user.role !== "ADMIN") {
         return res.status(403).json({ message: "Forbidden" });
       }
       const listing = await storage.getListing(req.params.id);
@@ -1689,7 +1694,7 @@ export async function registerRoutes(
   app.post("/api/manager/listings/:id/reject", authMiddleware, async (req: any, res) => {
     try {
       const user = req.user;
-      if (user.role !== "COMMUNITY_MANAGER" || !user.communityId) {
+      if (user.role !== "COMMUNITY_MANAGER" && user.role !== "ADMIN") {
         return res.status(403).json({ message: "Forbidden" });
       }
       const listing = await storage.getListing(req.params.id);

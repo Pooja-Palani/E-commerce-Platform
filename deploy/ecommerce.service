@@ -1,0 +1,16 @@
+[Unit]
+Description=E-commerce Platform
+After=network.target postgresql.service docker.service
+
+[Service]
+Type=simple
+User=azureuser
+WorkingDirectory=/home/azureuser/E-commerce-Platform-1
+Environment=NODE_ENV=production
+EnvironmentFile=/home/azureuser/E-commerce-Platform-1/.env
+ExecStart=/usr/bin/node dist/index.cjs
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

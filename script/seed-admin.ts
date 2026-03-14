@@ -10,7 +10,14 @@ async function main() {
 
     const existing = await db.select().from(users).where(eq(users.email, email));
     if (existing.length > 0) {
-        console.log("Admin user already exists");
+        const [admin] = existing;
+        await db.update(users).set({
+            phone: "+91 98765 43210",
+            address: "45, Anna Salai, T Nagar",
+            locality: "Chennai, Tamil Nadu",
+            postalCode: "600017",
+        }).where(eq(users.id, admin.id));
+        console.log("Updated admin profile with Chennai address");
         process.exit(0);
     }
 
@@ -24,6 +31,10 @@ async function main() {
         role: "ADMIN",
         status: "ACTIVE",
         isSeller: true,
+        phone: "+91 98765 43210",
+        address: "45, Anna Salai, T Nagar",
+        locality: "Chennai, Tamil Nadu",
+        postalCode: "600017",
     }).returning();
 
     console.log("Admin account created successfully!");

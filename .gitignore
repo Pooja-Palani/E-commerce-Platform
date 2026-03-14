@@ -6,3 +6,5 @@ vite.config.ts.*
 *.tar.gz
 .env
 uploads/
+logs
+deploy/ssl/certs//
