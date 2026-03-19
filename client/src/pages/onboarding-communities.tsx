@@ -93,11 +93,11 @@ export default function OnboardingCommunities() {
                                     onClick={() => handleJoin(community.id)}
                                     disabled={joinCommunity.isPending}
                                 >
-                                    {joinCommunity.isPending ? "Joining..." : (
-                                        <>
-                                            Join Community <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-                                        </>
-                                    )}
+                                    {joinCommunity.isPending ? "Entering..." : (
+                                            <>
+                                                Enter Community <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                                            </>
+                                        )}
                                 </Button>
                             </CardFooter>
                         </Card>

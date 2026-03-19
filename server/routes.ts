@@ -16,6 +16,8 @@ const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-for-dev-only";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+const communityPostCooldownByUser = new Map<string, number>();
+const COMMUNITY_POST_COOLDOWN_MS = 30_000;
 
 export async function registerRoutes(
   httpServer: Server,
@@ -152,6 +154,21 @@ export async function registerRoutes(
   app.post(api.auth.logout.path, (req, res) => {
     res.clearCookie("token", { path: "/" });
     res.status(200).json({ message: "Logged out" });
+  });
+
+  app.get("/api/public/branding", async (_req, res) => {
+    try {
+      const settings = await storage.getSettings();
+      res.status(200).json({
+        platformName: settings.platformName,
+        platformLogoUrl: settings.platformLogoUrl ?? null,
+      });
+    } catch {
+      res.status(200).json({
+        platformName: "Qvanto Market",
+        platformLogoUrl: null,
+      });
+    }
   });
 
   // Dummy OTP login (any code works for development)
@@ -638,6 +655,15 @@ export async function registerRoutes(
 
   app.post(api.communities.posts.create.path, authMiddleware, async (req: any, res) => {
     try {
+      const lastPostTime = communityPostCooldownByUser.get(req.user.id) ?? 0;
+      const now = Date.now();
+      const remainingMs = COMMUNITY_POST_COOLDOWN_MS - (now - lastPostTime);
+      if (remainingMs > 0) {
+        return res.status(429).json({
+          message: `Please wait ${Math.ceil(remainingMs / 1000)} seconds before posting again.`,
+        });
+      }
+
       const input = api.communities.posts.create.input.parse(req.body);
       if (input.listingId) {
         const listing = await storage.getListing(input.listingId);
@@ -657,6 +683,8 @@ export async function registerRoutes(
         authorId: req.user.id,
         ...(listingId && { listingId }),
       });
+
+      communityPostCooldownByUser.set(req.user.id, now);
       res.status(201).json(post);
     } catch (err) {
       res.status(400).json({ message: "Invalid input" });
@@ -761,12 +789,9 @@ export async function registerRoutes(
         sellerNameSnapshot: user.sellerDisplayName || user.fullName,
         communityNameSnapshot: comm.name,
         visibility: "COMMUNITY_ONLY",
-        status: "PENDING_APPROVAL",
+        status: "ACTIVE",
         sellerContactSnapshot: user.phone || user.email
       });
-      if (listing.status !== "PENDING_APPROVAL") {
-        console.error("Listing created with wrong status:", listing.status, "listingId:", listing.id);
-      }
       res.status(201).json(listing);
     } catch (err) {
       console.error("POST create listing error:", err);
@@ -1155,9 +1180,10 @@ export async function registerRoutes(
       if (!order) return res.status(404).json({ message: "Order not found" });
       if (order.sellerId !== req.user.id) return res.status(403).json({ message: "Forbidden" });
       const { status, priceSnapshot } = req.body;
-      const updates: { status?: string; priceSnapshot?: number } = {};
-      if (status && ["PENDING", "QUOTATION_PROVIDED", "CONFIRMED", "SHIPPED", "DELIVERED", "CANCELLED"].includes(status)) {
-        updates.status = status;
+      type OrderStatus = "PENDING" | "QUOTATION_PROVIDED" | "CONFIRMED" | "SHIPPED" | "DELIVERED" | "CANCELLED";
+      const updates: { status?: OrderStatus; priceSnapshot?: number } = {};
+      if (status && (["PENDING", "QUOTATION_PROVIDED", "CONFIRMED", "SHIPPED", "DELIVERED", "CANCELLED"] as OrderStatus[]).includes(status)) {
+        updates.status = status as OrderStatus;
       }
       if (typeof priceSnapshot === "number" && priceSnapshot >= 0) updates.priceSnapshot = priceSnapshot;
       if (Object.keys(updates).length === 0) return res.status(400).json({ message: "No valid updates" });
@@ -1187,7 +1213,7 @@ export async function registerRoutes(
       if (!status || !["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED"].includes(status)) {
         return res.status(400).json({ message: "Invalid status" });
       }
-      const updated = await storage.updateBooking(req.params.id, { status });
+      const updated = await storage.updateBooking(req.params.id, { status: status as "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" });
       res.status(200).json(updated);
     } catch (err) {
       res.status(400).json({ message: "Error updating booking" });

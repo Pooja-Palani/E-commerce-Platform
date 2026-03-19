@@ -243,12 +243,12 @@ export default function Profile() {
                                             ) : (
                                                 <div className="space-y-4">
                                                     <p className="text-xs text-muted-foreground line-clamp-2">{community.description}</p>
-                                                    <Button
+                                                        <Button
                                                         className="w-full font-bold"
                                                         onClick={() => join.mutate(community.id)}
                                                         disabled={join.isPending}
                                                     >
-                                                        {join.isPending ? "Requesting..." : "Join Community"}
+                                                        {join.isPending ? "Requesting..." : "Enter Community"}
                                                     </Button>
                                                 </div>
                                             )}

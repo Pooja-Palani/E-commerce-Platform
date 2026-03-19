@@ -8,7 +8,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MessageSquare, Send, User as UserIcon, ShoppingBag, Wrench, Mail, Phone, AlertCircle } from "lucide-react";
+import { MessageSquare, Send, User as UserIcon, ShoppingBag, Wrench, Mail, Phone, ImagePlus, Smile, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -37,7 +37,23 @@ export default function Forum() {
     });
     const [message, setMessage] = useState("");
     const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
+    const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+    const [imageUploading, setImageUploading] = useState(false);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [nextAllowedAt, setNextAllowedAt] = useState<number>(0);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const cooldownRemaining = Math.max(0, Math.ceil((nextAllowedAt - Date.now()) / 1000));
+
+    useEffect(() => {
+        if (!nextAllowedAt) return;
+        if (Date.now() >= nextAllowedAt) return;
+        const timer = window.setInterval(() => {
+            if (Date.now() >= nextAllowedAt) {
+                setNextAllowedAt(0);
+            }
+        }, 500);
+        return () => window.clearInterval(timer);
+    }, [nextAllowedAt]);
 
     const myListings = listings?.filter(
         l => l.sellerId === user.id && l.status === "ACTIVE" && l.communityId === user.communityId
@@ -47,17 +63,46 @@ export default function Forum() {
         scrollRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [posts?.length]);
 
+    const uploadAdImage = async (file: File) => {
+        setImageUploading(true);
+        try {
+            const fd = new FormData();
+            fd.append("image", file);
+            const res = await fetch("/api/upload", {
+                method: "POST",
+                body: fd,
+                credentials: "include",
+            });
+            if (!res.ok) throw new Error("Upload failed");
+            const data = await res.json();
+            setSelectedImageUrl(data.url);
+        } catch {
+            toast({ title: "Image upload failed", description: "Please try another image.", variant: "destructive" });
+        } finally {
+            setImageUploading(false);
+        }
+    };
+
     const handleSend = async () => {
-        const content = message.trim() || (selectedListingId ? "Shared a listing" : "");
-        if (!content) return;
+        if (cooldownRemaining > 0) {
+            toast({ title: "Please wait", description: `You can post again in ${cooldownRemaining}s.` });
+            return;
+        }
+
+        const typedContent = message.trim();
+        const content = typedContent || (selectedListingId ? "Shared a listing" : selectedImageUrl ? "Shared an image" : "");
+        if (!content && !selectedImageUrl && !selectedListingId) return;
         const title = selectedListingId
             ? (listings?.find(l => l.id === selectedListingId)?.title || "Shared listing")
-            : "Message";
+            : selectedImageUrl
+                ? "Image"
+                : "Message";
         const sharedListing = selectedListingId ? listings?.find(l => l.id === selectedListingId) : null;
         await createPostMutation.mutateAsync({
             title,
             content,
             ...(selectedListingId && { listingId: selectedListingId }),
+            ...(selectedImageUrl && { imageUrl: selectedImageUrl }),
             ...(sharedListing && {
                 _listing: {
                     id: sharedListing.id,
@@ -72,6 +117,9 @@ export default function Forum() {
         });
         setMessage("");
         setSelectedListingId(null);
+        setSelectedImageUrl(null);
+        setShowEmojiPicker(false);
+        setNextAllowedAt(Date.now() + 30_000);
     };
 
     if (isLoading) return <Layout><LoadingSpinner /></Layout>;
@@ -88,9 +136,9 @@ export default function Forum() {
         <Layout>
             <div className="flex flex-col h-[calc(100vh-8rem)] max-w-4xl mx-auto">
                 <div className="mb-4">
-                    <h1 className="text-3xl font-bold tracking-tight">Community Chat</h1>
+                    <h1 className="text-3xl font-bold tracking-tight">Community Ads</h1>
                     <p className="text-muted-foreground">
-                        Chat with {currentCommunity?.name || "your community"} — share services, products, and connect
+                        View and post ads in {currentCommunity?.name || "your community"} — share services and products
                     </p>
                 </div>
 
@@ -108,9 +156,9 @@ export default function Forum() {
                         ) : (
                             <div className="flex-1 min-h-0 flex flex-col items-center justify-center py-24 text-center border-b border-dashed border-border/50">
                                 <MessageSquare className="w-16 h-16 text-muted-foreground mb-4 opacity-50" />
-                                <h3 className="text-lg font-semibold">No messages yet</h3>
+                                <h3 className="text-lg font-semibold">No ads yet</h3>
                                 <p className="text-muted-foreground max-w-sm mt-1">
-                                    Be the first to start the conversation! Share your products or services with the community.
+                                    Be the first to post an ad. Share your products or services with the community.
                                 </p>
                             </div>
                         )}
@@ -135,22 +183,90 @@ export default function Forum() {
                                             </SelectContent>
                                         </Select>
                                     )}
+                                    {selectedImageUrl && (
+                                        <div className="relative w-fit">
+                                            <img src={selectedImageUrl} alt="Selected upload" className="h-24 w-24 rounded-lg object-cover border" />
+                                            <button
+                                                type="button"
+                                                className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center"
+                                                onClick={() => setSelectedImageUrl(null)}
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    )}
                                     <Input
-                                        placeholder="Type a message..."
+                                        placeholder={cooldownRemaining > 0 ? `Wait ${cooldownRemaining}s before next ad...` : "Type your ad message..."}
                                         value={message}
                                         onChange={e => setMessage(e.target.value)}
                                         onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSend()}
                                         className="flex-1"
+                                        disabled={cooldownRemaining > 0}
                                     />
+                                </div>
+                                <div className="flex items-end gap-2">
+                                    <label className="h-10 w-10 rounded-md border bg-background hover:bg-muted flex items-center justify-center cursor-pointer">
+                                        <ImagePlus className="w-4 h-4" />
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            disabled={cooldownRemaining > 0 || imageUploading}
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (!file) return;
+                                                await uploadAdImage(file);
+                                            }}
+                                        />
+                                    </label>
+                                    <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+                                        <PopoverTrigger asChild>
+                                            <button
+                                                type="button"
+                                                className="h-10 w-10 rounded-md border bg-background hover:bg-muted flex items-center justify-center"
+                                                disabled={cooldownRemaining > 0}
+                                            >
+                                                <Smile className="w-4 h-4" />
+                                            </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent align="end" side="top" className="w-56 p-2">
+                                            <div className="mb-2 px-1 text-[11px] font-medium text-muted-foreground">Pick an emoji</div>
+                                            <div className="grid grid-cols-4 gap-1.5">
+                                                {["😀", "😂", "😍", "🙏", "🔥", "🎉", "✅", "👍", "💡", "🏠", "🛒", "📢"].map((emoji) => (
+                                                    <button
+                                                        key={emoji}
+                                                        type="button"
+                                                        className="h-10 w-10 rounded-md hover:bg-muted transition-colors text-2xl leading-none flex items-center justify-center"
+                                                        onClick={() => {
+                                                            setMessage((m) => `${m}${emoji}`);
+                                                            setShowEmojiPicker(false);
+                                                        }}
+                                                    >
+                                                        <span className="leading-none">{emoji}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                                 <Button
                                     onClick={handleSend}
-                                    disabled={createPostMutation.isPending || (!message.trim() && !selectedListingId)}
+                                    disabled={
+                                        createPostMutation.isPending ||
+                                        imageUploading ||
+                                        cooldownRemaining > 0 ||
+                                        (!message.trim() && !selectedListingId && !selectedImageUrl)
+                                    }
                                     className="shrink-0"
                                 >
                                     <Send className="w-4 h-4" />
                                 </Button>
                             </div>
+                            <p className="mt-2 text-[11px] text-muted-foreground">
+                                {cooldownRemaining > 0
+                                    ? `Posting is limited to 1 ad every 30 seconds. You can post again in ${cooldownRemaining}s.`
+                                    : "You can post text, emojis, images, or a listing. Limit: 1 ad every 30 seconds."}
+                            </p>
                         </div>
                     </CardContent>
                 </Card>
@@ -168,6 +284,7 @@ function ChatMessage({
         authorId: string;
         title: string;
         content: string;
+        imageUrl: string | null;
         listingId: string | null;
         createdAt: string;
         author: { fullName: string; email: string | null; phone: string | null };
@@ -221,6 +338,11 @@ function ChatMessage({
                     </p>
                     {post.content && post.content !== "Shared a listing" && (
                         <p className="text-sm whitespace-pre-wrap">{post.content}</p>
+                    )}
+                    {post.imageUrl && (
+                        <a href={post.imageUrl} target="_blank" rel="noreferrer">
+                            <img src={post.imageUrl} alt="Shared ad" className="mt-2 max-h-64 rounded-xl border object-cover" />
+                        </a>
                     )}
                     {post.listing && (
                         <Link href={`/listings/${post.listing.id}`}>

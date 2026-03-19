@@ -17,6 +17,11 @@ interface AnalyticsResponse {
     serviceCategories: { name: string; value: number; color: string }[];
 }
 
+interface PublicBrandingResponse {
+    platformName: string;
+    platformLogoUrl: string | null;
+}
+
 export function useAdminAnalytics() {
     return useQuery<AnalyticsResponse, Error>({
         queryKey: ["/api/admin/analytics"],
@@ -42,6 +47,20 @@ export function useAdminSettings() {
       }
             return res.json();
         },
+    });
+}
+
+export function usePublicBranding() {
+    return useQuery<PublicBrandingResponse, Error>({
+        queryKey: ["/api/public/branding"],
+        queryFn: async () => {
+            const res = await fetch("/api/public/branding");
+            if (!res.ok) {
+                throw new Error("Failed to fetch platform branding");
+            }
+            return res.json();
+        },
+        staleTime: 5 * 60 * 1000,
     });
 }
 

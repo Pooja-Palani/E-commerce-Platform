@@ -50,7 +50,6 @@ export interface IStorage {
   getListingsByIds(ids: string[]): Promise<Listing[]>;
   getListings(): Promise<Listing[]>;
   getListingsBySeller(sellerId: string): Promise<Listing[]>;
-  getPendingListings(communityId: string): Promise<Listing[]>;
   createListing(listing: InsertListing): Promise<Listing>;
   updateListing(id: string, updates: UpdateListingRequest): Promise<Listing | undefined>;
   updateListingStock(id: string, stockQuantity: number): Promise<Listing | undefined>;
@@ -300,31 +299,15 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(listings).where(eq(listings.sellerId, sellerId));
   }
 
-  async getPendingListings(communityId: string): Promise<Listing[]> {
-    return await db.select().from(listings).where(
-      and(eq(listings.communityId, communityId), eq(listings.status, "PENDING_APPROVAL"))
-    );
-  }
+  // getPendingListings removed — listing approval flow disabled
 
   async createListing(listing: InsertListing): Promise<Listing> {
     const { status: _dropped, ...rest } = listing as InsertListing & { status?: string };
-    const values = { ...rest, status: "PENDING_APPROVAL" as const };
+    // Listings are created ACTIVE immediately — approval flow removed
+    const values = { ...rest, status: "ACTIVE" as const };
     const [inserted] = await db.insert(listings).values(values).returning();
     if (!inserted) throw new Error("Insert failed");
-    // Force status via raw SQL so DB always has PENDING_APPROVAL (avoids default/trigger override)
-    try {
-      await pool.query(
-        "UPDATE listings SET status = 'PENDING_APPROVAL'::listing_status WHERE id = $1",
-        [inserted.id]
-      );
-    } catch (e: any) {
-      if (e.code === "22P02" || e.message?.includes("invalid input value for enum")) {
-        throw new Error(
-          "Database enum listing_status is missing PENDING_APPROVAL. Run: npm run db:add-pending-approval"
-        );
-      }
-      throw e;
-    }
+    // No forced enum update required when creating ACTIVE listings
     const [updated] = await db.select().from(listings).where(eq(listings.id, inserted.id));
     return updated ?? inserted;
   }
@@ -405,7 +388,7 @@ export class DatabaseStorage implements IStorage {
     return newBooking;
   }
 
-  async updateBooking(id: string, updates: { status?: string }): Promise<Booking | undefined> {
+  async updateBooking(id: string, updates: { status?: "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" }): Promise<Booking | undefined> {
     const [updated] = await db.update(bookings).set(updates).where(eq(bookings.id, id)).returning();
     return updated;
   }
@@ -455,7 +438,7 @@ export class DatabaseStorage implements IStorage {
     return newOrder;
   }
 
-  async updateOrder(id: string, updates: { status?: string; priceSnapshot?: number }): Promise<Order | undefined> {
+  async updateOrder(id: string, updates: { status?: "PENDING" | "QUOTATION_PROVIDED" | "CONFIRMED" | "SHIPPED" | "DELIVERED" | "CANCELLED"; priceSnapshot?: number }): Promise<Order | undefined> {
     const [updated] = await db.update(orders).set(updates).where(eq(orders.id, id)).returning();
     return updated;
   }

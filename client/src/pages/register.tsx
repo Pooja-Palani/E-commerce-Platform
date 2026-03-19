@@ -3,17 +3,19 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerSchema, RegisterRequest } from "@shared/schema";
 import { useRegister } from "@/hooks/use-auth-api";
+import { usePublicBranding } from "@/hooks/use-admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Link, useSearch } from "wouter";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, ShoppingBag } from "lucide-react";
 
 const RequiredAsterisk = () => <span className="text-destructive">*</span>;
 
 export default function Register() {
   const register = useRegister();
+  const { data: branding } = usePublicBranding();
   const [showPassword, setShowPassword] = useState(false);
   const search = useSearch();
   const inviteCommunityId = typeof search === "string" ? new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get("invite") : null;
@@ -40,6 +42,18 @@ export default function Register() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 py-12">
       <div className="w-full max-w-3xl">
+        <div className="flex justify-center mb-6">
+          <div className="flex items-center gap-3 font-bold text-3xl tracking-tight text-primary">
+            <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden">
+              {branding?.platformLogoUrl ? (
+                <img src={branding.platformLogoUrl} alt="Platform logo" className="w-full h-full object-cover" />
+              ) : (
+                <ShoppingBag className="w-6 h-6" />
+              )}
+            </div>
+            {branding?.platformName || "Qvanto Market"}
+          </div>
+        </div>
         <Card className="border-border/50 shadow-xl shadow-black/5">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-center font-bold">Create an account</CardTitle>

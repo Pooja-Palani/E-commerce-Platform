@@ -53,7 +53,7 @@ export default function ListingDetail() {
 
     const user = useAuthStore((s) => s.user);
     const viewMode = useAuthStore((s) => s.viewMode);
-    const listingFromCache = id && allListings?.find((l) => l.id === id);
+    const listingFromCache = id ? allListings?.find((l) => l.id === id) : undefined;
     const displayListing = listing ?? listingFromCache;
 
     const listingId = displayListing?.id ?? id ?? "";
@@ -114,15 +114,15 @@ export default function ListingDetail() {
     };
 
     const openManageSlots = () => {
-        setEditSlots(listingSlots?.length ? listingSlots.map((s) => ({ startTime: s.startTime, endTime: s.endTime })) : [{ startTime: "", endTime: "" }]);
+        setEditSlots(listingSlots?.length ? listingSlots.map((s: { startTime: string; endTime: string }) => ({ startTime: s.startTime, endTime: s.endTime })) : [{ startTime: "", endTime: "" }]);
         setManageSlotsOpen(true);
     };
-    const addEditSlot = () => setEditSlots((s) => [...s, { startTime: "", endTime: "" }]);
+    const addEditSlot = () => setEditSlots((s: { startTime: string; endTime: string }[]) => [...s, { startTime: "", endTime: "" }]);
     const removeEditSlot = (i: number) => setEditSlots((s) => s.filter((_, j) => j !== i));
     const updateEditSlot = (i: number, field: "startTime" | "endTime", value: string) =>
         setEditSlots((s) => s.map((slot, j) => (j === i ? { ...slot, [field]: value } : slot)));
     const saveSlots = async () => {
-        const valid = editSlots.filter((s) => s.startTime.trim() && s.endTime.trim());
+        const valid = editSlots.filter((s: { startTime: string; endTime: string }) => s.startTime.trim() && s.endTime.trim());
         await replaceSlots.mutateAsync(valid);
         refetchSlots();
         setManageSlotsOpen(false);

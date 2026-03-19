@@ -4,6 +4,7 @@ import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, VariantProps } from "class-variance-authority"
 import { PanelLeftIcon } from "lucide-react"
+import { useLocation } from "wouter"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
@@ -370,8 +371,78 @@ function SidebarSeparator({
 }
 
 function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
+  const [location] = useLocation();
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  const scrollTopRef = React.useRef(0);
+
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onScroll = () => {
+      scrollTopRef.current = el.scrollTop;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Also save sidebar scroll on any document click (capture phase) so
+  // navigations originating outside the sidebar (eg. navbar) preserve it.
+  React.useEffect(() => {
+    const onDocClick = () => {
+      try {
+        const el = ref.current;
+        if (el) sessionStorage.setItem('sidebar:scrollTop', String(el.scrollTop));
+      } catch (_) {}
+    };
+
+    document.addEventListener('click', onDocClick, true);
+    return () => document.removeEventListener('click', onDocClick, true);
+  }, []);
+
+  // Preserve sidebar scroll position across route changes
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // Restore after the browser has performed its default scroll behavior
+    // Prefer any saved scroll from a click handler (sessionStorage) first,
+    // otherwise fall back to the last observed scrollTop.
+    let rafId: number | null = null;
+    let attempts = 0;
+
+    const saved = (() => {
+      try {
+        return sessionStorage.getItem('sidebar:scrollTop')
+      } catch (_) {
+        return null
+      }
+    })()
+
+    const target = saved != null ? Number(saved) || 0 : scrollTopRef.current;
+
+    const applyScroll = () => {
+      // apply until value sticks or attempts exhausted
+      try {
+        el.scrollTop = target;
+      } catch (_) {}
+      attempts += 1;
+      if (attempts < 10 && Math.abs((el.scrollTop || 0) - target) > 1) {
+        rafId = window.requestAnimationFrame(applyScroll);
+      } else {
+        try { sessionStorage.removeItem('sidebar:scrollTop') } catch (_) {}
+      }
+    }
+
+    // start on next frame to allow DOM updates/mounts
+    rafId = window.requestAnimationFrame(applyScroll);
+
+    return () => {
+      if (rafId != null) window.cancelAnimationFrame(rafId);
+    }
+  }, [location]);
+
   return (
     <div
+      ref={ref}
       data-slot="sidebar-content"
       data-sidebar="content"
       className={cn(
@@ -511,6 +582,19 @@ function SidebarMenuButton({
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const Comp = asChild ? Slot : "button"
   const { isMobile, state } = useSidebar()
+  // Persist sidebar scroll position when a navigation item is clicked.
+  const handleSaveSidebarScroll = () => {
+    try {
+      const el = document.querySelector('[data-slot="sidebar-content"]') as HTMLElement | null
+      if (el) {
+        sessionStorage.setItem('sidebar:scrollTop', String(el.scrollTop))
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  const { onClick: _onClick, ...restProps } = props as any
 
   const button = (
     <Comp
@@ -519,7 +603,13 @@ function SidebarMenuButton({
       data-size={size}
       data-active={isActive}
       className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
-      {...props}
+      onClick={(e: any) => {
+        try {
+          _onClick?.(e)
+        } catch (_) {}
+        handleSaveSidebarScroll()
+      }}
+      {...restProps}
     />
   )
 

@@ -57,9 +57,9 @@ Some products and services should require Community Manager approval before goin
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/manager/pending-listings` | List pending listings for manager’s community |
-| POST | `/api/manager/listings/:id/approve` | Approve listing (set ACTIVE) |
-| POST | `/api/manager/listings/:id/reject` | Reject listing (set INACTIVE) |
+| *Removed* | `/api/manager/pending-listings` | Listing approval flow disabled; endpoints removed |
+| *Removed* | `/api/manager/listings/:id/approve` | Listing approval flow disabled; endpoints removed |
+| *Removed* | `/api/manager/listings/:id/reject` | Listing approval flow disabled; endpoints removed |
 
 ---
 

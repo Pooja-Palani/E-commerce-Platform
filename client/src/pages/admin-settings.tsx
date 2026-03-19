@@ -1,6 +1,6 @@
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Settings2, Save, Bell, Shield, Mail, Globe, Database } from "lucide-react";
+import { Settings2, Save, Bell, Shield, Mail, Globe, Database, UploadCloud, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,11 +26,13 @@ export default function AdminSettings() {
 
     const [formData, setFormData] = useState<UpdatePlatformSettingsRequest>({});
     const [activeTab, setActiveTab] = useState<"general" | "security" | "notifications" | "email" | "backups">("general");
+    const [logoUploading, setLogoUploading] = useState(false);
 
     useEffect(() => {
         if (settings) {
             setFormData({
                 platformName: settings.platformName,
+                platformLogoUrl: settings.platformLogoUrl,
                 supportEmail: settings.supportEmail,
                 commissionRate: settings.commissionRate,
                 enableRegistration: settings.enableRegistration,
@@ -67,6 +69,30 @@ export default function AdminSettings() {
 
     const updateField = (key: keyof UpdatePlatformSettingsRequest, value: any) => {
         setFormData(prev => ({ ...prev, [key]: value }));
+    };
+
+    const uploadPlatformLogo = async (file: File) => {
+        setLogoUploading(true);
+        try {
+            const fd = new FormData();
+            fd.append("image", file);
+            const res = await fetch("/api/upload", {
+                method: "POST",
+                body: fd,
+                credentials: "include",
+            });
+            if (!res.ok) throw new Error("Upload failed");
+            const data = await res.json();
+            updateField("platformLogoUrl", data.url);
+        } catch {
+            toast({
+                title: "Logo upload failed",
+                description: "Please try a valid image file.",
+                variant: "destructive",
+            });
+        } finally {
+            setLogoUploading(false);
+        }
     };
 
     return (
@@ -138,6 +164,47 @@ export default function AdminSettings() {
                                                 className="max-w-md h-10"
                                             />
                                         </div>
+
+                                        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-4">
+                                            <Label className="font-bold text-slate-700">Platform Logo</Label>
+                                            <div className="flex flex-wrap items-center gap-3">
+                                                <label className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-white border border-slate-200 hover:border-[#1e3a8a]/40 text-sm font-semibold text-slate-700 cursor-pointer transition-colors">
+                                                    <UploadCloud className="w-4 h-4" />
+                                                    Upload Logo
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        className="hidden"
+                                                        onChange={async (e) => {
+                                                            const file = e.target.files?.[0];
+                                                            if (!file) return;
+                                                            await uploadPlatformLogo(file);
+                                                        }}
+                                                    />
+                                                </label>
+                                                {logoUploading && <span className="text-xs text-slate-500">Uploading...</span>}
+                                                {formData.platformLogoUrl && (
+                                                    <Button type="button" variant="outline" className="h-10" onClick={() => updateField("platformLogoUrl", null)}>
+                                                        Remove Logo
+                                                    </Button>
+                                                )}
+                                            </div>
+
+                                            <div className="h-24 rounded-lg border border-slate-200 bg-white flex items-center px-4 gap-3">
+                                                {formData.platformLogoUrl ? (
+                                                    <img src={formData.platformLogoUrl} alt="Platform logo preview" className="h-14 w-14 rounded-lg object-cover border border-slate-200" />
+                                                ) : (
+                                                    <div className="h-14 w-14 rounded-lg bg-slate-100 flex items-center justify-center border border-slate-200">
+                                                        <Building2 className="w-6 h-6 text-slate-400" />
+                                                    </div>
+                                                )}
+                                                <div>
+                                                    <p className="text-sm font-semibold text-slate-800">Brand Preview</p>
+                                                    <p className="text-xs text-slate-500">Shown in login and sidebar header.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <div className="space-y-2">
                                             <Label htmlFor="contactEmail" className="font-bold text-slate-700">Support Email</Label>
                                             <Input
@@ -191,8 +258,8 @@ export default function AdminSettings() {
                                         <Separator />
                                         <div className="flex items-center justify-between">
                                             <div className="space-y-0.5">
-                                                <Label className="text-base font-bold text-slate-900">Community Forums</Label>
-                                                <p className="text-sm text-slate-500 font-medium">Enable discussion boards for residential communities.</p>
+                                                <Label className="text-base font-bold text-slate-900">Community Ads</Label>
+                                                <p className="text-sm text-slate-500 font-medium">Enable community ad board for residential communities.</p>
                                             </div>
                                             <Switch
                                                 checked={formData.enableCommunityForums ?? true}

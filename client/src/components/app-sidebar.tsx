@@ -76,7 +76,7 @@ export function AppSidebar() {
 
   const navigationItems = [
     { title: "Home", url: "/", icon: LayoutDashboard },
-    ...(hasApprovedAccess ? [{ title: "Community Chat", url: "/forum", icon: MessageSquare }] : []),
+    ...(hasApprovedAccess ? [{ title: "Community Ads", url: "/forum", icon: MessageSquare }] : []),
     ...(hasApprovedAccess && viewMode === "BUYER" ? [{ title: "My Activity", url: "/activity", icon: Calendar }] : []),
     ...(showResidentNav && hasApprovedAccess ? [
       { title: "Cart", url: "/cart", icon: ShoppingCart },
@@ -92,7 +92,7 @@ export function AppSidebar() {
   const marketplaceItems = [
     { title: "Services", url: "/services", icon: Wrench },
     { title: "Products", url: "/products", icon: ShoppingBag },
-    { title: "Subcommunities", url: "/subcommunities", icon: Building2 },
+    { title: "Shops", url: "/subcommunities", icon: Building2 },
   ];
 
   const managerItems = [
@@ -103,26 +103,43 @@ export function AppSidebar() {
     { title: "Admin Panel", url: "/admin", icon: Settings },
   ];
 
+  const navButtonClass = "rounded-2xl px-4 py-3 transition-all group border border-transparent hover:border-primary/10 hover:bg-white hover:shadow-[0_18px_35px_-22px_rgba(15,23,42,0.30)]";
+
   return (
-    <Sidebar className="border-r border-border/50">
+    <Sidebar className="border-r border-white/60 bg-transparent">
       <SidebarContent>
-        <div className="p-6">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-3 font-bold text-xl tracking-tight text-primary">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground text-white">
-                <ShoppingBag className="w-5 h-5" />
+        <div className="p-5">
+          <div className="retail-surface rounded-[2rem] p-5">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3 font-bold text-xl tracking-tight text-primary">
+                <div className="h-11 w-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden shadow-sm">
+                  {settings?.platformLogoUrl ? (
+                    <img src={settings.platformLogoUrl} alt="Platform logo" className="w-full h-full object-cover" />
+                  ) : (
+                    <ShoppingBag className="w-5 h-5 text-primary" />
+                  )}
+                </div>
+                <div className="flex flex-col leading-tight">
+                  <span className="text-lg font-bold">{settings?.platformName || "Qvanto Market"}</span>
+                  <span className="text-xs font-medium text-muted-foreground capitalize">{user.role.toLowerCase().replace('_', ' ')} • neighborhood commerce</span>
+                </div>
               </div>
-              <div className="flex flex-col leading-tight">
-                <span className="text-lg font-bold">{settings?.platformName || "Qvanto Market"}</span>
-                <span className="text-xs font-medium text-muted-foreground capitalize">{user.role.toLowerCase().replace('_', ' ')}</span>
+            </div>
+            <div className="mt-4 retail-gradient-soft rounded-[1.5rem] border border-primary/10 px-4 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-primary/70">Today’s vibe</p>
+                  <p className="mt-1 text-sm font-bold text-slate-800">Shop local, book faster, stay connected.</p>
+                </div>
+                <TrendingUp className="h-5 w-5 text-primary" />
               </div>
             </div>
           </div>
-          <div className="mt-6 p-3 bg-primary/5 rounded-lg border border-primary/10">
+          <div className="mt-5 retail-surface rounded-[1.75rem] p-4">
             <div className="flex items-center justify-between mb-1.5">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Community</p>
               {showResidentNav && (
-                <Link href="/profile" className="text-[10px] font-bold text-primary hover:underline">Add community</Link>
+                <Link href="/profile" className="text-[10px] font-bold text-primary hover:underline">Manage</Link>
               )}
             </div>
             {userCommunitiesList.length > 0 ? (
@@ -135,7 +152,7 @@ export function AppSidebar() {
                 }}
                 disabled={updateUser.isPending}
               >
-                <SelectTrigger className="h-9 w-full font-bold text-primary border-primary/20 bg-background/80">
+                <SelectTrigger className="h-10 w-full rounded-xl font-bold text-primary border-primary/15 bg-background/90">
                   <SelectValue placeholder="Choose community" />
                 </SelectTrigger>
                 <SelectContent>
@@ -154,10 +171,10 @@ export function AppSidebar() {
           </div>
 
           {showResidentNav && (
-            <div className="mt-6 px-3 py-4 bg-muted/30 rounded-xl border border-border/50 shadow-sm">
+            <div className="mt-5 retail-surface rounded-[1.75rem] px-4 py-4">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">View Mode</span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${viewMode === 'BUYER' ? 'bg-blue-500/10 text-blue-500' : 'bg-orange-500/10 text-orange-500'}`}>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${viewMode === 'BUYER' ? 'bg-blue-500/10 text-blue-500' : 'bg-violet-500/10 text-violet-600'}`}>
                   {viewMode}
                 </span>
               </div>
@@ -178,10 +195,10 @@ export function AppSidebar() {
                         );
                       }
                     }}
-                    className="data-[state=checked]:bg-orange-500"
+                    className="data-[state=checked]:bg-violet-500"
                   />
                 </div>
-                <div className={`p-1.5 rounded-md ${viewMode === 'SELLER' ? 'bg-orange-500 text-white shadow-orange-500/20' : 'bg-muted text-muted-foreground'} transition-all shadow-sm`}>
+                <div className={`p-1.5 rounded-md ${viewMode === 'SELLER' ? 'bg-violet-500 text-white shadow-violet-500/20' : 'bg-muted text-muted-foreground'} transition-all shadow-sm`}>
                   <Store size={14} />
                 </div>
               </div>
@@ -192,7 +209,7 @@ export function AppSidebar() {
           )}
 
           {isAdminOrManager && (
-            <div className="mt-6 px-3 py-4 bg-muted/30 rounded-xl border border-border/50 shadow-sm">
+            <div className="mt-5 retail-surface rounded-[1.75rem] px-4 py-4">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">Role Mode</span>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${useAsUser ? 'bg-blue-500/10 text-blue-500' : 'bg-amber-500/10 text-amber-500'}`}>
@@ -235,7 +252,7 @@ export function AppSidebar() {
                   { title: "Settings", url: "/admin/settings", icon: Settings },
                 ].map((item) => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={location === item.url} className="px-4 py-2 hover:bg-primary/5 transition-colors group">
+                    <SidebarMenuButton asChild isActive={location === item.url} className={`${navButtonClass} ${location === item.url ? 'bg-white shadow-[0_18px_35px_-24px_rgba(99,102,241,0.32)] border-primary/10' : ''}`}>
                       <Link href={item.url} className="flex items-center gap-3 w-full">
                         <item.icon className={`w-4 h-4 transition-colors ${location === item.url ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'}`} />
                         <span className={`text-sm font-medium ${location === item.url ? 'text-primary font-bold' : 'text-muted-foreground/90 group-hover:text-primary'}`}>{item.title}</span>
@@ -254,14 +271,14 @@ export function AppSidebar() {
                 <SidebarMenu>
                   {[
                     { title: "Dashboard", url: "/manager", icon: LayoutDashboard },
-                    { title: "Community Chat", url: "/forum", icon: MessageSquare },
+                    { title: "Community Ads", url: "/forum", icon: MessageSquare },
                     { title: "Approvals", url: "/manager/approvals", icon: Shield },
                     { title: "Services", url: "/manager/services", icon: Wrench },
                     { title: "Products", url: "/manager/products", icon: Package },
                     { title: "Members", url: "/manager/members", icon: Users },
                   ].map((item) => (
                     <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild isActive={location === item.url} className="px-4 py-2 hover:bg-primary/5 transition-colors group">
+                      <SidebarMenuButton asChild isActive={location === item.url} className={`${navButtonClass} ${location === item.url ? 'bg-white shadow-[0_18px_35px_-24px_rgba(99,102,241,0.32)] border-primary/10' : ''}`}>
                         <Link href={item.url} className="flex items-center gap-3 w-full">
                           <item.icon className={`w-4 h-4 transition-colors ${location === item.url ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'}`} />
                           <span className={`text-sm font-medium ${location === item.url ? 'text-primary font-bold' : 'text-muted-foreground/90 group-hover:text-primary'}`}>{item.title}</span>
@@ -284,7 +301,7 @@ export function AppSidebar() {
                     { title: "Accept Payments", url: "/accept-payments", icon: Wallet },
                   ].map((item) => (
                     <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild isActive={location === item.url} className="px-4 py-2 hover:bg-primary/5 transition-colors group">
+                      <SidebarMenuButton asChild isActive={location === item.url} className={`${navButtonClass} ${location === item.url ? 'bg-white shadow-[0_18px_35px_-24px_rgba(99,102,241,0.32)] border-primary/10' : ''}`}>
                         <Link href={item.url} className="flex items-center gap-3 w-full">
                           <item.icon className={`w-4 h-4 transition-colors ${location === item.url ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'}`} />
                           <span className={`text-sm font-medium ${location === item.url ? 'text-primary font-bold' : 'text-muted-foreground/90 group-hover:text-primary'}`}>{item.title}</span>
@@ -304,7 +321,7 @@ export function AppSidebar() {
                 <SidebarMenu>
                   {navigationItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild isActive={location === item.url} className="px-4 py-2 hover:bg-primary/5 transition-colors group">
+                      <SidebarMenuButton asChild isActive={location === item.url} className={`${navButtonClass} ${location === item.url ? 'bg-white shadow-[0_18px_35px_-24px_rgba(99,102,241,0.32)] border-primary/10' : ''}`}>
                         <Link href={item.url} className="flex items-center gap-3 w-full">
                           <item.icon className={`w-4 h-4 transition-colors ${location === item.url ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'}`} />
                           <span className={`text-sm font-medium ${location === item.url ? 'text-primary font-bold' : 'text-muted-foreground/90 group-hover:text-primary'}`}>{item.title}</span>
@@ -323,7 +340,7 @@ export function AppSidebar() {
                   <SidebarMenu>
                     {marketplaceItems.map((item) => (
                       <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild isActive={location === item.url} className="px-4 py-2 hover:bg-primary/5 transition-colors group">
+                        <SidebarMenuButton asChild isActive={location === item.url} className={`${navButtonClass} ${location === item.url ? 'bg-white shadow-[0_18px_35px_-24px_rgba(99,102,241,0.32)] border-primary/10' : ''}`}>
                           <Link href={item.url} className="flex items-center gap-3 w-full">
                             <item.icon className={`w-4 h-4 transition-colors ${location === item.url ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'}`} />
                             <span className={`text-sm font-medium ${location === item.url ? 'text-primary font-bold' : 'text-muted-foreground/90 group-hover:text-primary'}`}>{item.title}</span>
@@ -347,12 +364,12 @@ export function AppSidebar() {
               const visibleSubs = subsOfParent.filter(sub => memberSubIds.has(sub.id));
               return visibleSubs.length > 0 && (
                 <SidebarGroup>
-                  <SidebarGroupLabel className="px-6 text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 mt-4">Sub-Communities</SidebarGroupLabel>
+                  <SidebarGroupLabel className="px-6 text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 mt-4">Shops</SidebarGroupLabel>
                   <SidebarGroupContent className="px-2">
                     <SidebarMenu>
                       {visibleSubs.map((sub) => (
                         <SidebarMenuItem key={sub.id}>
-                          <SidebarMenuButton asChild className="px-4 py-2 hover:bg-primary/5 transition-colors group">
+                          <SidebarMenuButton asChild className={navButtonClass}>
                             <Link href={`/communities/${sub.id}`} className="flex items-center gap-3 w-full">
                               <Building2 className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
                               <span className="text-sm font-medium text-muted-foreground/90 group-hover:text-primary">{sub.name}</span>
@@ -369,10 +386,10 @@ export function AppSidebar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-border/50">
+      <SidebarFooter className="border-t border-white/60 p-4">
         <div className="flex flex-col gap-4">
           <Link href="/profile">
-            <button className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-primary/5 transition-all group text-left relative">
+            <button className="retail-surface flex items-center gap-3 w-full rounded-[1.5rem] p-3 transition-all group text-left relative hover:translate-y-[-1px]">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all shadow-sm">
                 <User size={18} />
               </div>
@@ -390,7 +407,7 @@ export function AppSidebar() {
 
           <SidebarMenuButton
             onClick={() => logout.mutate()}
-            className="flex items-center gap-3 px-4 py-2 text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-all rounded-lg group h-auto"
+            className="flex h-auto items-center gap-3 rounded-2xl border border-transparent px-4 py-3 text-muted-foreground transition-all hover:border-destructive/10 hover:bg-destructive/5 hover:text-destructive group"
           >
             <LogOut className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             <span className="text-sm font-medium">Sign Out</span>

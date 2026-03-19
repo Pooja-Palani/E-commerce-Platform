@@ -28,6 +28,7 @@ async function main() {
   try {
     const toAdd: [string, string, string][] = [
       ["posts", "listing_id", "VARCHAR(255)"],
+      ["posts", "image_url", "TEXT"],
       ["listings", "image_url", "TEXT"],
       ["bookings", "slot_start_time", "TEXT"],
       ["bookings", "slot_end_time", "TEXT"],
@@ -35,6 +36,10 @@ async function main() {
       ["users", "payment_accepts_upi", "BOOLEAN NOT NULL DEFAULT false"],
       ["users", "payment_accepts_card", "BOOLEAN NOT NULL DEFAULT false"],
       ["users", "payment_accepts_cash", "BOOLEAN NOT NULL DEFAULT false"],
+      ["communities", "banner_url", "TEXT"],
+      ["communities", "logo_url", "TEXT"],
+      ["communities", "theme_color", "TEXT"],
+      ["platform_settings", "platform_logo_url", "TEXT"],
     ];
 
     for (const [table, column, type] of toAdd) {

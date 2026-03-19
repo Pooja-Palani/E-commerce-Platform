@@ -117,10 +117,7 @@ export default function MyServices() {
 
     const services = listings?.filter(l => l.listingType === "SERVICE") || [];
     const liveServices = services.filter((s: any) => s.status === "ACTIVE");
-    const waitingServices = services.filter((s: any) => s.status === "PENDING_APPROVAL");
     const notLiveServices = services.filter((s: any) => s.status === "INACTIVE" || s.status === "REMOVED");
-    const pendingCommunityIds = [...new Set(waitingServices.map((s: any) => s.communityId).filter(Boolean))];
-    const managerByCommunity = useCommunityManagers(pendingCommunityIds);
 
     const getListingTitle = (listingId: string) =>
         services.find(s => s.id === listingId)?.title || "Service";
@@ -143,8 +140,6 @@ export default function MyServices() {
                             <p className="text-muted-foreground text-sm mt-1 flex items-center gap-1.5">
                                 <BarChart3 className="w-4 h-4" />
                                 <span className="font-medium text-foreground">{liveServices.length}</span> live
-                                <span className="text-muted-foreground">·</span>
-                                <span className="font-medium text-foreground">{waitingServices.length}</span> waiting for approval
                                 {notLiveServices.length > 0 && (
                                     <><span className="text-muted-foreground">·</span><span className="font-medium text-foreground">{notLiveServices.length}</span> not live</>
                                 )}
@@ -235,24 +230,7 @@ export default function MyServices() {
                                 </div>
                             </section>
                         )}
-                        {waitingServices.length > 0 && (
-                            <section>
-                                <h2 className="text-lg font-bold text-slate-800 mb-4">Waiting for approval</h2>
-                                <p className="text-sm text-muted-foreground mb-4">These listings will go live after your community manager approves them.</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {waitingServices.map((service: any) => (
-                                        <ServiceCard
-                                            key={service.id}
-                                            service={service}
-                                            bookingCount={0}
-                                            statusLabel="Pending approval"
-                                            statusBadgeClass="bg-amber-500/10 text-amber-600 border-amber-500/20"
-                                            approvalRecipient={managerByCommunity[service.communityId] ? `Community manager: ${managerByCommunity[service.communityId]}` : "Community manager"}
-                                        />
-                                    ))}
-                                </div>
-                            </section>
-                        )}
+                        {/* Listing approval removed — there are no waiting-for-approval listings */}
                         {notLiveServices.length > 0 && (
                             <section>
                                 <h2 className="text-lg font-bold text-slate-800 mb-4">Not live</h2>

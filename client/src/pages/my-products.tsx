@@ -93,10 +93,7 @@ export default function MyProducts() {
 
     const products = listings?.filter(l => l.listingType === "PRODUCT") || [];
     const liveProducts = products.filter((p: any) => p.status === "ACTIVE");
-    const waitingProducts = products.filter((p: any) => p.status === "PENDING_APPROVAL");
     const notLiveProducts = products.filter((p: any) => p.status === "INACTIVE" || p.status === "REMOVED");
-    const pendingCommunityIds = [...new Set(waitingProducts.map((p: any) => p.communityId).filter(Boolean))];
-    const managerByCommunity = useCommunityManagers(pendingCommunityIds);
 
     const getListingTitle = (listingId: string) =>
         (listings ?? []).find((l: any) => l.id === listingId)?.title || "Listing";
@@ -204,24 +201,7 @@ export default function MyProducts() {
                                 </div>
                             </section>
                         )}
-                        {waitingProducts.length > 0 && (
-                            <section>
-                                <h2 className="text-lg font-bold text-slate-800 mb-4">Waiting for approval</h2>
-                                <p className="text-sm text-muted-foreground mb-4">These listings will go live after your community manager approves them.</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {waitingProducts.map((product: any) => (
-                                        <ProductCard
-                                            key={product.id}
-                                            product={product}
-                                            getQuoted={getQuotedPriceForListing}
-                                            statusLabel="Pending approval"
-                                            statusBadgeClass="bg-amber-500/10 text-amber-600 border-amber-500/20"
-                                            approvalRecipient={managerByCommunity[product.communityId] ? `Community manager: ${managerByCommunity[product.communityId]}` : "Community manager"}
-                                        />
-                                    ))}
-                                </div>
-                            </section>
-                        )}
+                        {/* Listing approval removed — there are no waiting-for-approval listings */}
                         {notLiveProducts.length > 0 && (
                             <section>
                                 <h2 className="text-lg font-bold text-slate-800 mb-4">Not live</h2>

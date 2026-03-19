@@ -137,6 +137,7 @@ export const api = {
             authorId: z.string(),
             title: z.string(),
             content: z.string(),
+            imageUrl: z.string().nullable(),
             listingId: z.string().nullable(),
             createdAt: z.string(),
             author: z.object({ fullName: z.string(), email: z.string().nullable(), phone: z.string().nullable() }),
@@ -157,9 +158,13 @@ export const api = {
         path: '/api/communities/:id/posts' as const,
         input: z.object({
           title: z.string().min(1),
-          content: z.string().min(1),
+          content: z.string().optional().default(""),
           listingId: z.string().optional(),
-        }),
+          imageUrl: z.string().optional(),
+        }).refine((v) => {
+          const hasText = (v.content ?? "").trim().length > 0;
+          return hasText || !!v.listingId || !!v.imageUrl;
+        }, { message: "Post must include text, image, or listing" }),
         responses: {
           201: z.custom<typeof posts.$inferSelect>(),
           400: errorSchemas.validation,

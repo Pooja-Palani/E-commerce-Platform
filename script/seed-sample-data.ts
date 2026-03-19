@@ -152,7 +152,7 @@ async function main() {
       paymentPreference: "DIRECT",
       sellerContactSnapshot: seller1.phone ?? seller1.email,
       visibility: "COMMUNITY_ONLY",
-      status: "PENDING_APPROVAL",
+      status: "ACTIVE",
     })
     .returning();
 
@@ -176,7 +176,7 @@ async function main() {
       paymentPreference: "DIRECT",
       sellerContactSnapshot: seller2.phone ?? seller2.email,
       visibility: "COMMUNITY_ONLY",
-      status: "PENDING_APPROVAL",
+      status: "ACTIVE",
     })
     .returning();
 

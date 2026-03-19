@@ -10,7 +10,7 @@ export const communityVisibilityEnum = pgEnum("community_visibility", ["PUBLIC",
 export const communityStatusEnum = pgEnum("community_status", ["ACTIVE", "DISABLED"]);
 
 export const listingVisibilityEnum = pgEnum("listing_visibility", ["GLOBAL", "COMMUNITY_ONLY"]);
-export const listingStatusEnum = pgEnum("listing_status", ["ACTIVE", "INACTIVE", "REMOVED", "PENDING_APPROVAL"]);
+export const listingStatusEnum = pgEnum("listing_status", ["ACTIVE", "INACTIVE", "REMOVED"]);
 export const listingTypeEnum = pgEnum("listing_type", ["SERVICE", "PRODUCT"]);
 
 export const bookingStatusEnum = pgEnum("booking_status", ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED"]);
@@ -36,6 +36,9 @@ export const communities = pgTable("communities", {
   locality: text("locality"),
   address: text("address"),
   description: text("description"),
+  bannerUrl: text("banner_url"),
+  logoUrl: text("logo_url"),
+  themeColor: text("theme_color"),
   totalUnits: integer("total_units"),
   contactEmail: text("contact_email"),
   contactPhone: text("contact_phone"),
@@ -191,6 +194,7 @@ export const posts = pgTable("posts", {
   authorId: varchar("author_id").notNull(),
   title: text("title").notNull(),
   content: text("content").notNull(),
+  imageUrl: text("image_url"),
   listingId: varchar("listing_id"), // optional shared product/service
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -206,6 +210,7 @@ export const comments = pgTable("comments", {
 export const platformSettings = pgTable("platform_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   platformName: text("platform_name").notNull().default("Qvanto Market"),
+  platformLogoUrl: text("platform_logo_url"),
   supportEmail: text("support_email").notNull().default("support@qvantomarket.com"),
   commissionRate: integer("commission_rate").notNull().default(5),
   enableRegistration: boolean("enable_registration").notNull().default(true),

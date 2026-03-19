@@ -119,20 +119,7 @@ Same schema supports all; only config differs per community.
 
 ### 4.4 New APIs (Manager Only)
 
-- **GET** `/api/manager/pending-listings`  
-  - Auth: community manager (or admin).  
-  - Returns listings where `communityId = manager’s community` and `status = 'PENDING_APPROVAL'`.  
-  - Include seller name, category, title, description (and maybe first image) for the approval queue.
-
-- **POST** `/api/manager/listings/:id/approve`  
-  - Set `status = 'ACTIVE'`.  
-  - Optional: set `approved_at`, `approved_by_id` if you add those columns.  
-  - Optional: notify seller.
-
-- **POST** `/api/manager/listings/:id/reject`  
-  - Body: `{ reason?: string }`.  
-  - Set `status = 'INACTIVE'` (or a dedicated REJECTED if you add it); store `rejected_at`, `rejected_by_id`, `rejection_reason`.  
-  - Optional: notify seller with reason.
+> NOTE: The manager listing approval endpoints described here have been removed — listing approval flow is disabled and new listings become ACTIVE immediately. The rest of the plan (settings, marketplace visibility, seller UX) remains relevant if approval is reintroduced in the future.
 
 - **GET** `/api/communities/:id/listing-approval-settings` (for manager/admin)  
   - Return `listing_approval_mode`, `product_categories_approval`, `service_categories_approval` (and platform default if used) so the UI can show/edit settings.

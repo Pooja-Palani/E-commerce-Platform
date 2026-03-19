@@ -169,19 +169,24 @@ export default function Dashboard() {
       <div className="flex flex-col gap-12 max-w-7xl mx-auto pb-24 px-4">
 
         {/* Hero Section */}
-        <section className="relative rounded-[2.5rem] overflow-hidden bg-primary p-8 md:p-16 text-primary-foreground shadow-2xl shadow-primary/20 overflow-visible">
-          <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-white/10 to-transparent pointer-events-none" />
+        <section className="relative overflow-visible rounded-[2.75rem] bg-[linear-gradient(135deg,#4f46e5_0%,#6366f1_42%,#7dd3fc_100%)] p-8 text-primary-foreground shadow-[0_32px_90px_-34px_rgba(79,70,229,0.45)] md:p-16">
+          <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-white/15 to-transparent pointer-events-none" />
           <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
           <div className="relative z-10 max-w-2xl space-y-6">
-            <Badge className="bg-white/20 hover:bg-white/30 text-white border-none px-4 py-1 text-xs font-bold uppercase tracking-widest">
+            <Badge className="bg-white/20 hover:bg-white/30 text-white border-none px-4 py-1 text-xs font-bold uppercase tracking-[0.24em]">
               Exclusive to {userCommunity?.name}
             </Badge>
             <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-[1.1]">
-              Discover Everything in Your Neighborhood.
+              Discover local deals, trusted sellers, and everyday essentials.
             </h1>
             <p className="text-lg md:text-xl text-primary-foreground/80 max-w-lg leading-relaxed">
-              From reliable home services to unique local products, find everything you need right here in your complex.
+              From reliable home services to trending local products, browse a storefront that feels fast, vibrant, and built for residents.
             </p>
+            <div className="flex flex-wrap gap-3">
+              <div className="rounded-full bg-white/15 px-4 py-2 text-sm font-bold text-white backdrop-blur-sm">Same-community trust</div>
+              <div className="rounded-full bg-white/15 px-4 py-2 text-sm font-bold text-white backdrop-blur-sm">Quick add-to-cart</div>
+              <div className="rounded-full bg-white/15 px-4 py-2 text-sm font-bold text-white backdrop-blur-sm">Instant service booking</div>
+            </div>
             <div className="flex flex-wrap gap-4 pt-4">
               <Button size="lg" variant="secondary" className="rounded-2xl font-bold h-14 px-8 shadow-xl shadow-black/10 hover:scale-105 transition-transform" asChild>
                 <Link href="/services">Browse Services</Link>
@@ -207,10 +212,21 @@ export default function Dashboard() {
                 <div className="p-2 bg-blue-400 rounded-lg text-blue-950"><ShieldCheck size={16} fill="currentColor" /></div>
                 <span className="text-sm font-bold">Secure Booking</span>
               </div>
-              <div className="flex -space-x-2">
-                {[1, 2, 3].map(i => <div key={i} className="w-6 h-6 rounded-full bg-primary-foreground/20 border-2 border-primary" />)}
-                <div className="w-6 h-6 rounded-full bg-white/10 text-[8px] flex items-center justify-center font-bold">50+</div>
-              </div>
+                <div className="flex -space-x-2">
+                  {[
+                    "/uploads/1772825055680-son7q2f.png",
+                    "/uploads/1772828356443-hrwftwj.jpg",
+                    "/uploads/1773247350514-5bxhy6c.png",
+                  ].map((src, i) => (
+                    <img
+                      key={i}
+                      src={src}
+                      alt={`member-${i + 1}`}
+                      className="w-6 h-6 rounded-full border-2 border-white object-cover"
+                    />
+                  ))}
+                  <div className="w-7 h-7 rounded-full bg-primary text-white text-[9px] flex items-center justify-center font-bold shadow-sm">50+</div>
+                </div>
             </div>
           </div>
         </section>
@@ -245,8 +261,8 @@ export default function Dashboard() {
         <section className="grid grid-cols-2 md:grid-cols-4 gap-6">
           {[
             { title: "Home Services", desc: "Plumbing, Cleaning & more", icon: Wrench, color: "bg-blue-500", url: "/services" },
-            { title: "Local Market", desc: "Gadgets & Daily needs", icon: ShoppingBag, color: "bg-orange-500", url: "/products" },
-            { title: "Community Chat", desc: "Share & connect", icon: MessageSquare, color: "bg-purple-500", url: "/forum" },
+            { title: "Local Market", desc: "Gadgets & Daily needs", icon: ShoppingBag, color: "bg-sky-500", url: "/products" },
+            { title: "Community Ads", desc: "Share listings", icon: MessageSquare, color: "bg-purple-500", url: "/forum" },
             { title: "My Activity", desc: "Track your orders", icon: Calendar, color: "bg-indigo-500", url: "/activity" },
           ].map((cat, i) => (
             <Link key={i} href={cat.url}>
@@ -281,9 +297,16 @@ export default function Dashboard() {
                   <Link key={listing.id} href={`/listings/${listing.id}`}>
                     <Card className="group relative rounded-[2rem] overflow-hidden border-border/50 shadow-sm hover:shadow-2xl transition-all bg-white flex flex-col h-full border-none ring-1 ring-border/50 hover:ring-primary/20 cursor-pointer">
                       <div className="h-48 bg-muted/20 relative overflow-hidden flex items-center justify-center">
-                        <ShoppingBag className="w-16 h-16 text-muted-foreground/20 group-hover:scale-110 transition-all duration-500" />
+                        {listing.imageUrl ? (
+                          <img src={listing.imageUrl} alt={listing.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                        ) : (
+                          <ShoppingBag className="w-16 h-16 text-muted-foreground/20 group-hover:scale-110 transition-all duration-500" />
+                        )}
                         <div className="absolute top-4 right-4">
                           <Badge className="bg-white/80 backdrop-blur-sm text-primary border-none shadow-sm font-bold">₹{listing.price}</Badge>
+                        </div>
+                        <div className="absolute top-4 left-4">
+                          <Badge className="border-none bg-slate-950/75 text-white shadow-sm">Trending</Badge>
                         </div>
                       </div>
                       <CardHeader className="pb-2">
@@ -322,9 +345,9 @@ export default function Dashboard() {
           {/* Sidebar Feed: Community Talks */}
           <div className="space-y-8">
             <div className="flex items-center justify-between">
-              <h3 className="text-2xl font-bold tracking-tight">Community Chat</h3>
+              <h3 className="text-2xl font-bold tracking-tight">Community Ads</h3>
               <Link href="/forum" className="group text-sm font-bold text-primary flex items-center gap-1">
-                Chat <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                View Ads <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
               </Link>
             </div>
 
@@ -344,15 +367,15 @@ export default function Dashboard() {
                 ) : (
                   <div className="py-12 text-center space-y-3">
                     <MessageSquare className="w-12 h-12 text-muted-foreground/30 mx-auto" />
-                    <p className="text-xs font-bold text-muted-foreground px-8">No messages yet. Start the conversation!</p>
+                    <p className="text-xs font-bold text-muted-foreground px-8">No ads yet. Post the first one!</p>
                     <Button variant="outline" size="sm" className="rounded-xl font-bold border-primary/20" asChild>
-                      <Link href="/forum">Open Chat</Link>
+                      <Link href="/forum">Open Ads</Link>
                     </Button>
                   </div>
                 )}
                 <Link href="/forum">
                   <Button variant="ghost" className="w-full text-primary font-bold hover:bg-primary/5 rounded-xl">
-                    Open Chat
+                    Open Ads
                   </Button>
                 </Link>
               </CardContent>
@@ -367,7 +390,7 @@ export default function Dashboard() {
                 <h4 className="font-bold text-lg">New here?</h4>
                 <p className="text-xs text-white/80 leading-relaxed font-medium">Explore how our community platform works and how you can start selling today.</p>
                 <Button className="w-full bg-white text-indigo-700 hover:bg-white/90 rounded-xl font-bold" asChild>
-                  <Link href="/forum">Open Chat</Link>
+                  <Link href="/forum">Open Ads</Link>
                 </Button>
               </div>
             </Card>

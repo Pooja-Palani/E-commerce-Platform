@@ -57,6 +57,7 @@ type PostWithAuthor = {
     authorId: string;
     title: string;
     content: string;
+    imageUrl: string | null;
     listingId: string | null;
     createdAt: string;
     author: { fullName: string; email: string | null; phone: string | null };
@@ -71,7 +72,7 @@ export function useCreatePost(
     const { toast } = useToast();
 
     return useMutation({
-        mutationFn: async (data: { title: string; content: string; listingId?: string; _listing?: PostWithAuthor["listing"] }) => {
+        mutationFn: async (data: { title: string; content?: string; listingId?: string; imageUrl?: string; _listing?: PostWithAuthor["listing"] }) => {
             const { _listing, ...payload } = data;
             const url = buildUrl(api.communities.posts.create.path, { id: communityId });
             const res = await fetch(url, {
@@ -97,6 +98,7 @@ export function useCreatePost(
                 authorId: newPost.authorId,
                 title: newPost.title,
                 content: newPost.content,
+                imageUrl: (newPost as any).imageUrl ?? null,
                 listingId: newPost.listingId ?? null,
                 createdAt,
                 author: {

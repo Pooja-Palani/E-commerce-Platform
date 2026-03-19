@@ -99,7 +99,7 @@ async function main() {
       paymentPreference: "DIRECT",
       sellerContactSnapshot: pooja.phone ?? pooja.email,
       visibility: "COMMUNITY_ONLY",
-      status: "PENDING_APPROVAL",
+      status: "ACTIVE",
     })
     .returning();
 
@@ -122,7 +122,7 @@ async function main() {
       paymentPreference: "DIRECT",
       sellerContactSnapshot: pooja.phone ?? pooja.email,
       visibility: "COMMUNITY_ONLY",
-      status: "PENDING_APPROVAL",
+      status: "ACTIVE",
     })
     .returning();
 
@@ -146,7 +146,7 @@ async function main() {
       paymentPreference: "DIRECT",
       sellerContactSnapshot: pooja.phone ?? pooja.email,
       visibility: "COMMUNITY_ONLY",
-      status: "PENDING_APPROVAL",
+      status: "ACTIVE",
     })
     .returning();
 
@@ -172,7 +172,7 @@ async function main() {
       paymentPreference: "DIRECT",
       sellerContactSnapshot: pooja.phone ?? pooja.email,
       visibility: "COMMUNITY_ONLY",
-      status: "PENDING_APPROVAL",
+      status: "ACTIVE",
     })
     .returning();
 

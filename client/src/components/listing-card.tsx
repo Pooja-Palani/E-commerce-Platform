@@ -8,14 +8,19 @@ import { Link } from "wouter";
 export function ListingCard({ listing }: { listing: Listing }) {
   return (
     <Link href={`/listings/${listing.id}`}>
-      <Card className="group flex flex-col h-full overflow-hidden border-border/50 hover:shadow-2xl transition-all duration-300 cursor-pointer hover:-translate-y-1 bg-white">
-        <div className="h-48 bg-gradient-to-br from-primary/10 to-secondary relative flex items-center justify-center overflow-hidden">
+      <Card className="group flex h-full flex-col overflow-hidden rounded-[2rem] border-white/70 bg-white/95 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.26)] transition-all duration-300 cursor-pointer hover:-translate-y-1.5 hover:shadow-[0_32px_80px_-34px_rgba(99,102,241,0.28)]">
+        <div className="retail-gradient-soft relative flex h-56 items-center justify-center overflow-hidden">
           {listing.imageUrl ? (
-            <img src={listing.imageUrl} alt={listing.title} className="w-full h-full object-cover" />
+            <img src={listing.imageUrl} alt={listing.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
           ) : (
             <Tag className="w-12 h-12 text-primary/40 group-hover:scale-110 transition-transform duration-500" />
           )}
-          <div className="absolute top-3 right-3 flex gap-2">
+          <div className="absolute left-4 top-4">
+            <Badge className="border-none bg-slate-950/75 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-white shadow-lg">
+              {listing.listingType}
+            </Badge>
+          </div>
+          <div className="absolute top-4 right-4 flex gap-2">
             {listing.visibility === 'GLOBAL' ? (
               <Badge variant="secondary" className="bg-white/80 backdrop-blur-sm shadow-sm border-none">
                 <Globe className="w-3 h-3 mr-1" /> Global
@@ -26,16 +31,16 @@ export function ListingCard({ listing }: { listing: Listing }) {
               </Badge>
             )}
           </div>
-          <div className="absolute bottom-3 left-3">
-            <Badge className="bg-primary text-white border-none shadow-lg py-0.5 px-2 text-[10px] font-bold uppercase tracking-wider">
+          <div className="absolute bottom-4 left-4">
+            <Badge className="border-none bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-primary shadow-lg">
               {listing.buyNowEnabled ? "Buy Now" : "Request Quotation"}
             </Badge>
           </div>
         </div>
-        <CardHeader className="p-5 pb-2 shrink-0">
-          <div className="flex justify-between items-start gap-4">
+        <CardHeader className="shrink-0 p-5 pb-2">
+          <div className="flex items-start justify-between gap-4">
             <h3 className="font-bold text-lg line-clamp-1 group-hover:text-primary transition-colors">{listing.title}</h3>
-            <span className="font-exrabold text-lg text-primary">
+            <span className="text-lg font-extrabold text-primary">
               {listing.buyNowEnabled ? `₹${listing.price}` : "Price on request"}
             </span>
           </div>
@@ -51,7 +56,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
             )}
 
             {listing.availabilityBasis === 'TIMELINE' && listing.startDate && listing.endDate && (
-              <Badge variant="outline" className="text-[10px] font-bold border-orange-100 bg-orange-50/50 text-orange-600 px-2 py-0.5">
+              <Badge variant="outline" className="text-[10px] font-bold border-indigo-100 bg-indigo-50/60 text-indigo-600 px-2 py-0.5">
                 <Calendar className="w-3 h-3 mr-1" />
                 {format(new Date(listing.startDate), 'MMM d')} - {format(new Date(listing.endDate), 'MMM d')}
               </Badge>
@@ -65,7 +70,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
             )}
           </div>
         </CardContent>
-        <CardFooter className="p-4 px-5 pt-3 border-t mt-auto text-[10px] font-bold text-muted-foreground/60 flex justify-between items-center bg-muted/5 uppercase tracking-widest">
+        <CardFooter className="mt-auto flex items-center justify-between border-t border-border/50 bg-gradient-to-r from-indigo-50/70 to-white px-5 py-4 text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/70">
           <span className="truncate max-w-[100px]">{listing.sellerNameSnapshot}</span>
           <span className="truncate max-w-[100px]">{listing.communityNameSnapshot}</span>
         </CardFooter>

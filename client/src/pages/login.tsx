@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { loginSchema, LoginRequest } from "@shared/schema";
 import { useLogin, useRequestOtp, useLoginWithOtp } from "@/hooks/use-auth-api";
+import { usePublicBranding } from "@/hooks/use-admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +20,7 @@ export default function Login() {
   const requestOtp = useRequestOtp();
   const loginWithOtp = useLoginWithOtp();
   const [showPassword, setShowPassword] = useState(false);
+  const { data: branding } = usePublicBranding();
   const [mode, setMode] = useState<LoginMode>("password");
   const [otpEmail, setOtpEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -39,8 +41,14 @@ export default function Login() {
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
           <div className="flex items-center gap-3 font-bold text-3xl tracking-tight text-primary">
-            <ShoppingBag className="w-8 h-8" />
-            QvantoMarket
+            <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden">
+              {branding?.platformLogoUrl ? (
+                <img src={branding.platformLogoUrl} alt="Platform logo" className="w-full h-full object-cover" />
+              ) : (
+                <ShoppingBag className="w-6 h-6" />
+              )}
+            </div>
+            {branding?.platformName || "Qvanto Market"}
           </div>
         </div>
         <Card className="border-border/50 shadow-xl shadow-black/5">
