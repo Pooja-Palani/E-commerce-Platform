@@ -7,7 +7,7 @@
  */
 import "dotenv/config";
 import { db } from "../server/db";
-import { listings } from "@shared/schema";
+import { listings } from "../shared/schema";
 
 async function main() {
   const updated = await db.update(listings).set({ status: "ACTIVE" }).returning({ id: listings.id, status: listings.status });
