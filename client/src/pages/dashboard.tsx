@@ -27,6 +27,7 @@ export default function Dashboard() {
   const { data: posts, isLoading: loadingPosts } = useForumPosts(user?.communityId || "");
   const join = useJoinCommunity();
 
+
   const sellerStockListings = React.useMemo(() => {
     if (!listings || !user) return [];
     const mine = listings.filter((l: any) => l.sellerId === user.id && l.availabilityBasis === "STOCK" && l.buyNowEnabled);
@@ -51,6 +52,12 @@ export default function Dashboard() {
     return map;
   }, [userCommunitiesData]);
 
+  // Server already filters listings to only the user's active community
+  const visibleListingsForTrending = React.useMemo(() => {
+    if (!listings || !user) return [] as any[];
+    return listings;
+  }, [listings, user]);
+
   if (!user) return null;
 
   if (user.role === 'ADMIN' && !useAsUser) return <Redirect to="/admin" />;
@@ -59,6 +66,27 @@ export default function Dashboard() {
   const isPending = user.status === 'PENDING';
   const noCommunity = !user.communityId;
   const userCommunity = communities?.find(c => c.id === user.communityId);
+
+  // Banners for the hero carousel (community banner first, then defaults)
+  const defaultBanners = [
+    "/uploads/1772825055680-son7q2f.png",
+    "/uploads/1772828356443-hrwftwj.jpg",
+    "/uploads/1773247350514-5bxhy6c.png",
+  ];
+  const banners = React.useMemo(() => {
+    const items: string[] = [];
+    if (userCommunity?.bannerUrl) items.push(userCommunity.bannerUrl);
+    return items.concat(defaultBanners).filter((x) => !!x);
+  }, [userCommunity?.bannerUrl]);
+
+  const [bannerIndex, setBannerIndex] = React.useState(0);
+  const nextBanner = () => setBannerIndex((i) => (i + 1) % banners.length);
+  React.useEffect(() => {
+    if (!banners || banners.length === 0) return;
+    setBannerIndex(0);
+    const t = setInterval(() => setBannerIndex((i) => (i + 1) % banners.length), 6000);
+    return () => clearInterval(t);
+  }, [banners.length, banners]);
 
   if (loadingComm || loadingUserCommunities || loadingList || loadingPosts) {
     return (
@@ -169,7 +197,13 @@ export default function Dashboard() {
       <div className="flex flex-col gap-12 max-w-7xl mx-auto pb-24 px-4">
 
         {/* Hero Section */}
-        <section className="relative overflow-visible rounded-[2.75rem] bg-[linear-gradient(135deg,#4f46e5_0%,#6366f1_42%,#7dd3fc_100%)] p-8 text-primary-foreground shadow-[0_32px_90px_-34px_rgba(79,70,229,0.45)] md:p-16">
+        <section
+          className="relative overflow-visible rounded-[2.75rem] p-8 text-primary-foreground md:p-16"
+          style={{
+            background: `linear-gradient(135deg, var(--community-color) 0%, ${userCommunity?.themeColor || "#6366f1"} 42%, rgba(125,211,252,0.95) 100%)`,
+            boxShadow: `0 32px 90px -34px ${userCommunity?.themeColor || "#4f46e5"}55`,
+          }}
+        >
           <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-white/15 to-transparent pointer-events-none" />
           <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
           <div className="relative z-10 max-w-2xl space-y-6">
@@ -267,8 +301,8 @@ export default function Dashboard() {
           ].map((cat, i) => (
             <Link key={i} href={cat.url}>
               <div className="group cursor-pointer p-6 rounded-[2rem] bg-white border border-border/50 hover:border-primary/50 hover:shadow-2xl hover:shadow-primary/5 transition-all space-y-4">
-                <div className={`w-14 h-14 rounded-2xl ${cat.color} text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
-                  <cat.icon size={28} />
+                  <div className={`w-14 h-14 rounded-2xl ${cat.color} text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
+                  {React.createElement(cat.icon, { size: 28 })}
                 </div>
                 <div className="space-y-1">
                   <h4 className="font-bold text-lg group-hover:text-primary transition-colors">{cat.title}</h4>
@@ -293,7 +327,7 @@ export default function Dashboard() {
 
             {listings && listings.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                {listings.slice(0, 4).map((listing) => (
+                {visibleListingsForTrending.slice(0, 4).map((listing) => (
                   <Link key={listing.id} href={`/listings/${listing.id}`}>
                     <Card className="group relative rounded-[2rem] overflow-hidden border-border/50 shadow-sm hover:shadow-2xl transition-all bg-white flex flex-col h-full border-none ring-1 ring-border/50 hover:ring-primary/20 cursor-pointer">
                       <div className="h-48 bg-muted/20 relative overflow-hidden flex items-center justify-center">

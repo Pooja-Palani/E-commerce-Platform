@@ -22,6 +22,7 @@ import {
   ChevronDown,
   Receipt,
   UserRound,
+  Tag,
 } from "lucide-react";
 import {
   Sidebar,
@@ -51,7 +52,7 @@ export function AppSidebar() {
   const useAsUser = useAuthStore((state) => state.useAsUser);
   const setUseAsUser = useAuthStore((state) => state.setUseAsUser);
   const logout = useLogout();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { data: settings } = useAdminSettings();
   const { data: communities } = useCommunities();
   const { data: userCommunitiesData = [] } = useUserCommunities(user?.id ?? "");
@@ -92,7 +93,7 @@ export function AppSidebar() {
   const marketplaceItems = [
     { title: "Services", url: "/services", icon: Wrench },
     { title: "Products", url: "/products", icon: ShoppingBag },
-    { title: "Shops", url: "/subcommunities", icon: Building2 },
+    { title: "Shops", url: "/shops", icon: Building2 },
   ];
 
   const managerItems = [
@@ -139,7 +140,7 @@ export function AppSidebar() {
             <div className="flex items-center justify-between mb-1.5">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Community</p>
               {showResidentNav && (
-                <Link href="/profile" className="text-[10px] font-bold text-primary hover:underline">Manage</Link>
+                <Link href="/onboarding/communities" className="text-[10px] font-bold text-primary hover:underline">Manage</Link>
               )}
             </div>
             {userCommunitiesList.length > 0 ? (
@@ -224,7 +225,18 @@ export function AppSidebar() {
                   <Switch
                     id="use-as-user"
                     checked={useAsUser}
-                    onCheckedChange={setUseAsUser}
+                    onCheckedChange={(checked) => {
+                      setUseAsUser(checked);
+                      // Ensure user view shows buyer content (resident dashboard)
+                      if (checked) {
+                        setViewMode("BUYER");
+                        setLocation("/");
+                      } else {
+                        if (user.role === "ADMIN") setLocation("/admin");
+                        else if (user.role === "COMMUNITY_MANAGER") setLocation("/manager");
+                        else setLocation("/");
+                      }
+                    }}
                     className="data-[state=checked]:bg-blue-500"
                   />
                 </div>
@@ -249,6 +261,7 @@ export function AppSidebar() {
                   { title: "Communities", url: "/admin/communities", icon: Building2 },
                   { title: "Users", url: "/admin/users", icon: Users },
                   { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
+                    { title: "Coupon Queue", url: "/admin/coupons/requests", icon: Tag },
                   { title: "Settings", url: "/admin/settings", icon: Settings },
                 ].map((item) => (
                   <SidebarMenuItem key={item.title}>
@@ -273,6 +286,7 @@ export function AppSidebar() {
                     { title: "Dashboard", url: "/manager", icon: LayoutDashboard },
                     { title: "Community Ads", url: "/forum", icon: MessageSquare },
                     { title: "Approvals", url: "/manager/approvals", icon: Shield },
+                    { title: "Coupon Requests", url: "/manager/coupons/request", icon: Tag },
                     { title: "Services", url: "/manager/services", icon: Wrench },
                     { title: "Products", url: "/manager/products", icon: Package },
                     { title: "Members", url: "/manager/members", icon: Users },

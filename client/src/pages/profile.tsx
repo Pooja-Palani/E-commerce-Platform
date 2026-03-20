@@ -180,22 +180,36 @@ export default function Profile() {
                     </div>
                     <div className="p-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {allCommunities?.map((community) => {
+                            {allCommunities?.filter(c => membershipMap.has(c.id)).map((community) => {
                                 const status = membershipMap.get(community.id);
                                 const isPrimary = user.communityId === community.id;
 
                                 return (
                                     <Card key={community.id} className={`border-border/50 transition-all ${isPrimary ? 'ring-2 ring-primary bg-primary/5 shadow-md' : 'hover:shadow-md'}`}>
-                                        <CardHeader>
-                                            <CardTitle className="text-lg font-bold">{community.name}</CardTitle>
-                                            <CardDescription className="flex items-center gap-2 line-clamp-1 flex-wrap">
-                                                <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {community.locality}</span>
-                                                <Badge variant="outline" className={`text-[10px] font-bold ${(community as any).visibility === 'PRIVATE' ? 'border-amber-200 text-amber-700 bg-amber-50' : 'border-blue-200 text-blue-700 bg-blue-50'}`}>
-                                                    {(community as any).visibility === 'PRIVATE' ? <Lock className="w-3 h-3 mr-0.5" /> : <Globe className="w-3 h-3 mr-0.5" />}
-                                                    {(community as any).visibility || 'PUBLIC'}
-                                                </Badge>
-                                            </CardDescription>
-                                        </CardHeader>
+                                            {community.bannerUrl ? (
+                                                <div className="h-32 w-full overflow-hidden rounded-t-2xl">
+                                                    <img src={community.bannerUrl} alt={`${community.name} banner`} className="w-full h-full object-cover" />
+                                                </div>
+                                            ) : null}
+                                            <CardHeader>
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    {community.logoUrl && (
+                                                        <div className="w-10 h-10 rounded-md overflow-hidden bg-white/60 border border-white/30">
+                                                            <img src={community.logoUrl} alt={`${community.name} logo`} className="w-full h-full object-cover" />
+                                                        </div>
+                                                    )}
+                                                    <div>
+                                                        <CardTitle className="text-lg font-bold">{community.name}</CardTitle>
+                                                        <CardDescription className="flex items-center gap-2 line-clamp-1 flex-wrap">
+                                                            <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {community.locality}</span>
+                                                            <Badge variant="outline" className={`text-[10px] font-bold ${(community as any).visibility === 'PRIVATE' ? 'border-amber-200 text-amber-700 bg-amber-50' : 'border-blue-200 text-blue-700 bg-blue-50'}`}>
+                                                                {(community as any).visibility === 'PRIVATE' ? <Lock className="w-3 h-3 mr-0.5" /> : <Globe className="w-3 h-3 mr-0.5" />}
+                                                                {(community as any).visibility || 'PUBLIC'}
+                                                            </Badge>
+                                                        </CardDescription>
+                                                    </div>
+                                                </div>
+                                            </CardHeader>
                                         <CardContent className="space-y-4">
                                             {status === 'ACTIVE' ? (
                                                 <div className="space-y-4">

@@ -7,7 +7,10 @@ export function useListingSlots(listingId: string) {
   return useQuery({
     queryKey: ["/api/listings", listingId, "slots"],
     queryFn: async () => {
-      const res = await fetch(buildUrl(api.listingSlots.list.path, { id: listingId }), { credentials: "include" });
+      const useAsUser = (await import('@/store/use-auth')).useAuthStore.getState().useAsUser;
+      const headers: any = {};
+      if (useAsUser) headers['x-act-as-user'] = '1';
+      const res = await fetch(buildUrl(api.listingSlots.list.path, { id: listingId }), { credentials: "include", headers });
       if (!res.ok) throw new Error("Failed to fetch slots");
       return res.json();
     },
@@ -20,7 +23,10 @@ export function useAvailableSlots(listingId: string, date: string) {
     queryKey: ["/api/listings", listingId, "available-slots", date],
     queryFn: async () => {
       const url = `${buildUrl(api.listingSlots.available.path, { id: listingId })}?date=${encodeURIComponent(date)}`;
-      const res = await fetch(url, { credentials: "include" });
+      const useAsUser = (await import('@/store/use-auth')).useAuthStore.getState().useAsUser;
+      const headers: any = {};
+      if (useAsUser) headers['x-act-as-user'] = '1';
+      const res = await fetch(url, { credentials: "include", headers });
       if (!res.ok) throw new Error("Failed to fetch available slots");
       return res.json();
     },

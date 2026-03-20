@@ -98,6 +98,7 @@ export default function AdminUsers() {
     const [isRemoveFromCommOpen, setIsRemoveFromCommOpen] = useState(false);
     const [removeFromCommUser, setRemoveFromCommUser] = useState<{ id: string; name: string } | null>(null);
     const [selectedCommunityIds, setSelectedCommunityIds] = useState<Set<string>>(new Set());
+    const [roleFilter, setRoleFilter] = useState<"ALL" | "RESIDENT" | "COMMUNITY_MANAGER" | "ADMIN">("ALL");
 
     if (isLoading) return <Layout><LoadingSpinner /></Layout>;
 
@@ -184,6 +185,11 @@ export default function AdminUsers() {
         });
     };
 
+    const filteredUsers = users?.filter((u: any) => {
+        if (roleFilter === "ALL") return true;
+        return u.role === roleFilter;
+    });
+
     return (
         <Layout>
             <div className="space-y-8 pb-8">
@@ -201,6 +207,40 @@ export default function AdminUsers() {
                         <CardTitle className="text-lg font-bold text-slate-800">Platform Directory</CardTitle>
                     </CardHeader>
                     <CardContent>
+                        <div className="mb-4 flex items-center gap-2">
+                            <Button
+                                size="sm"
+                                variant={roleFilter === "ALL" ? "default" : "outline"}
+                                onClick={() => setRoleFilter("ALL")}
+                                className="font-bold text-xs h-8"
+                            >
+                                All
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant={roleFilter === "ADMIN" ? "default" : "outline"}
+                                onClick={() => setRoleFilter("ADMIN")}
+                                className="font-bold text-xs h-8"
+                            >
+                                Admins
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant={roleFilter === "COMMUNITY_MANAGER" ? "default" : "outline"}
+                                onClick={() => setRoleFilter("COMMUNITY_MANAGER")}
+                                className="font-bold text-xs h-8"
+                            >
+                                Community Managers
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant={roleFilter === "RESIDENT" ? "default" : "outline"}
+                                onClick={() => setRoleFilter("RESIDENT")}
+                                className="font-bold text-xs h-8"
+                            >
+                                Residents
+                            </Button>
+                        </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left min-w-[1100px]">
                                 <thead className="bg-[#f8fafc] text-slate-500 uppercase text-[10px] font-bold tracking-wider">
@@ -216,7 +256,7 @@ export default function AdminUsers() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {users?.map((user) => {
+                                    {filteredUsers?.map((user) => {
                                         const userCommunity = communities?.find((c) => c.id === user.communityId);
                                         return (
                                         <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">

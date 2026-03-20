@@ -63,7 +63,12 @@ export function useHasApprovedAccess() {
   const hasActiveMembership = (userCommunitiesData as { joinStatus: string }[]).some(
     (m) => m.joinStatus === "ACTIVE"
   );
-  const hasApprovedAccess = !actingAsResident || (user?.status === "ACTIVE" && hasActiveMembership);
+  let hasApprovedAccess = !actingAsResident || (user?.status === "ACTIVE" && hasActiveMembership);
+  // If an admin/community manager is switching to user view, allow access to their own community
+  // even if they don't have an explicit ACTIVE membership record (common for manager accounts).
+  if (isAdminOrManager && useAsUser && user?.communityId) {
+    hasApprovedAccess = true;
+  }
   return { hasApprovedAccess, isLoading };
 }
 

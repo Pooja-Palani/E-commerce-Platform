@@ -22,11 +22,13 @@ import ManagerApprovals from "./pages/manager-approvals";
 import ManagerServices from "./pages/manager-services";
 import ManagerProducts from "./pages/manager-products";
 import ManagerMembers from "./pages/manager-members";
+import ManagerCouponRequest from "./pages/manager-coupon-request";
 import AdminDashboard from "./pages/admin-dashboard";
 import AdminUsers from "./pages/admin-users";
 import AdminCommunities from "./pages/admin-communities";
 import AdminAnalytics from "./pages/admin-analytics";
 import AdminSettings from "./pages/admin-settings";
+import AdminCouponRequests from "./pages/admin-coupon-requests";
 
 // New Pages
 import MyActivity from "./pages/my-activity";
@@ -105,7 +107,7 @@ function Router() {
       <ApprovedResidentRoute path="/orders" component={Orders} />
       <ApprovedResidentRoute path="/services" component={ServicesMarketplace} />
       <ApprovedResidentRoute path="/products" component={ProductsMarketplace} />
-      <ApprovedResidentRoute path="/subcommunities" component={Subcommunities} />
+      <ApprovedResidentRoute path="/shops" component={Subcommunities} />
       <ApprovedResidentRoute path="/accept-payments" component={AcceptPayments} />
       <ApprovedResidentRoute path="/forum" component={Forum} />
       <ApprovedResidentRoute path="/forum/post/:id" component={PostDetail} />
@@ -119,11 +121,13 @@ function Router() {
       <ProtectedRoute path="/manager/services" component={ManagerServices} />
       <ProtectedRoute path="/manager/products" component={ManagerProducts} />
       <ProtectedRoute path="/manager/members" component={ManagerMembers} />
+      <ProtectedRoute path="/manager/coupons/request" component={ManagerCouponRequest} />
       <ProtectedRoute path="/admin" component={AdminDashboard} />
       <ProtectedRoute path="/admin/users" component={AdminUsers} />
       <ProtectedRoute path="/admin/communities" component={AdminCommunities} />
       <ProtectedRoute path="/admin/analytics" component={AdminAnalytics} />
       <ProtectedRoute path="/admin/settings" component={AdminSettings} />
+      <ProtectedRoute path="/admin/coupons/requests" component={AdminCouponRequests} />
       <ProtectedRoute path="/onboarding/communities" component={OnboardingCommunities} />
       <Route component={NotFound} />
     </Switch>

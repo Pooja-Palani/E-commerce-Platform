@@ -175,8 +175,50 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteCommunity(id: string): Promise<boolean> {
-    const [deleted] = await db.delete(communities).where(eq(communities.id, id)).returning();
-    return !!deleted;
+    // Cascade-delete related data to ensure no orphaned listings, memberships, or posts remain.
+    try {
+      // 1) Find listings for this community
+      const communityListings = await db.select({ id: listings.id }).from(listings).where(eq(listings.communityId, id));
+      const listingIds = communityListings.map((l: any) => l.id as string);
+
+      // 2) Delete listing slots, product interests, bookings, orders related to these listings
+      if (listingIds.length) {
+        await db.delete(listingSlots).where(inArray(listingSlots.listingId, listingIds));
+        await db.delete(productInterests).where(inArray(productInterests.listingId, listingIds));
+        await db.delete(bookings).where(inArray(bookings.listingId, listingIds));
+        await db.delete(orders).where(inArray(orders.listingId, listingIds));
+      }
+
+      // 3) Delete listings
+      await db.delete(listings).where(eq(listings.communityId, id));
+
+      // 4) Delete forum posts and their comments for this community
+      const commPosts = await db.select({ id: posts.id }).from(posts).where(eq(posts.communityId, id));
+      const postIds = commPosts.map((p: any) => p.id as string);
+      if (postIds.length) {
+        await db.delete(comments).where(inArray(comments.postId, postIds));
+      }
+      await db.delete(posts).where(eq(posts.communityId, id));
+
+      // 5) Delete reports for this community
+      await db.delete(reports).where(eq(reports.communityId, id));
+
+      // 6) Delete community invites
+      await db.delete(communityInvites).where(eq(communityInvites.communityId, id));
+
+      // 7) Remove user-community memberships for this community
+      await db.delete(userCommunities).where(eq(userCommunities.communityId, id));
+
+      // 8) Unset primary community for users whose primary was this community
+      await db.update(users).set({ communityId: null }).where(eq(users.communityId, id));
+
+      // 9) Finally delete the community
+      const [deleted] = await db.delete(communities).where(eq(communities.id, id)).returning();
+      return !!deleted;
+    } catch (err) {
+      console.error("deleteCommunity cascade error:", err);
+      return false;
+    }
   }
 
   async getCommunityMembers(communityId: string): Promise<User[]> {
@@ -293,6 +335,11 @@ export class DatabaseStorage implements IStorage {
 
   async getListings(): Promise<Listing[]> {
     return await db.select().from(listings);
+  }
+
+  // Compatibility helper: pending listings concept removed, return empty array
+  async getPendingListings(communityId: string): Promise<Listing[]> {
+    return [];
   }
 
   async getListingsBySeller(sellerId: string): Promise<Listing[]> {

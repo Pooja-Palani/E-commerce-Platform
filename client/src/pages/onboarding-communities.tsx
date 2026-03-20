@@ -60,11 +60,27 @@ export default function OnboardingCommunities() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                     {discoveryCommunities.map((community) => (
                         <Card key={community.id} className="flex flex-col border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-                            <CardHeader className="pb-4">
+                            {community.bannerUrl ? (
+                                <div className="h-36 w-full overflow-hidden rounded-t-2xl">
+                                    <img src={community.bannerUrl} alt={`${community.name} banner`} className="w-full h-full object-cover" />
+                                </div>
+                            ) : (
+                                <div className="h-36 w-full bg-gradient-to-br from-primary/20 to-primary/5 rounded-t-2xl flex items-center justify-center">
+                                    <Users className="w-12 h-12 text-primary/40" />
+                                </div>
+                            )}
+                            <CardHeader className="pb-4 pt-4">
                                 <div className="flex justify-between items-start mb-2">
-                                    <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
-                                        {community.locality || "Local Area"}
-                                    </Badge>
+                                    <div className="flex items-center gap-3">
+                                        {community.logoUrl && (
+                                            <div className="w-10 h-10 rounded-md overflow-hidden bg-white/60 border border-white/30">
+                                                <img src={community.logoUrl} alt={`${community.name} logo`} className="w-full h-full object-cover" />
+                                            </div>
+                                        )}
+                                        <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
+                                            {community.locality || "Local Area"}
+                                        </Badge>
+                                    </div>
                                 </div>
                                 <CardTitle className="text-xl font-bold line-clamp-1">{community.name}</CardTitle>
                                 <CardDescription className="line-clamp-2 h-10 mt-2">

@@ -33,9 +33,9 @@ export default function Subcommunities() {
     <Layout>
       <div className="max-w-4xl mx-auto space-y-8 pb-12">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Sub-Communities</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Shops</h1>
           <p className="text-muted-foreground mt-1">
-            Browse and sell in your sub-communities. You only see sub-communities you&apos;ve joined.
+            Browse and sell in your shops. You only see shops you&apos;ve joined.
           </p>
         </div>
 
@@ -43,9 +43,9 @@ export default function Subcommunities() {
           <Card className="border-dashed">
             <CardContent className="py-16 text-center">
               <Building2 className="w-16 h-16 mx-auto text-muted-foreground/40 mb-4" />
-              <h3 className="text-lg font-semibold">No sub-communities yet</h3>
+              <h3 className="text-lg font-semibold">No shops yet</h3>
               <p className="text-muted-foreground mt-1 max-w-sm mx-auto">
-                You haven&apos;t joined any sub-communities, or your community doesn&apos;t have any. Check your Profile for community memberships.
+                You haven&apos;t joined any shops, or your community doesn&apos;t have any. Check your Profile for community memberships.
               </p>
               <Button asChild variant="outline" className="mt-6">
                 <Link href="/profile">Go to Profile</Link>

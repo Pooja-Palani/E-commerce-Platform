@@ -246,88 +246,7 @@ export default function ListingDetail() {
                             </CardContent>
                         </Card>
 
-                        {/* Service: Book date & slot (buyers) – in main content so always visible */}
-                        {isService && !isOwner && (
-                            <Card className="rounded-3xl border-primary/20 bg-primary/5 overflow-hidden">
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-xl flex items-center gap-2">
-                                        <Calendar className="w-5 h-5 text-primary" />
-                                        Book this service
-                                    </CardTitle>
-                                    <CardDescription>
-                                        {hasSlots
-                                            ? "Pick a date and time slot. Each slot can only be booked once."
-                                            : "Pick your preferred date. The seller will be notified and can confirm."}
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-5">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="mainBookingDate" className="font-bold">Preferred date</Label>
-                                        <Input
-                                            id="mainBookingDate"
-                                            type="date"
-                                            className="rounded-xl h-12"
-                                            value={bookingDate}
-                                            onChange={(e) => {
-                                                setBookingDate(e.target.value);
-                                                setSelectedSlot(null);
-                                            }}
-                                            min={new Date().toISOString().split("T")[0]}
-                                        />
-                                    </div>
-                                    {hasSlots && bookingDate && (
-                                        <div className="space-y-2">
-                                            <Label className="font-bold">Available time slots</Label>
-                                            {loadingSlots ? (
-                                                <p className="text-sm text-muted-foreground">Loading slots...</p>
-                                            ) : availableSlots && availableSlots.length > 0 ? (
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                    {availableSlots.map((slot: { id: string; startTime: string; endTime: string }) => (
-                                                        <button
-                                                            key={slot.id}
-                                                            type="button"
-                                                            className={`p-4 rounded-xl border-2 text-left transition-all ${
-                                                                selectedSlot?.startTime === slot.startTime
-                                                                    ? "border-primary bg-primary/10 text-primary font-medium"
-                                                                    : "border-border/50 hover:border-primary/30"
-                                                            }`}
-                                                            onClick={() => setSelectedSlot({ startTime: slot.startTime, endTime: slot.endTime })}
-                                                        >
-                                                            <span className="font-medium">{slot.startTime} – {slot.endTime}</span>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <p className="text-sm text-muted-foreground">No slots free on this date. Try another.</p>
-                                            )}
-                                        </div>
-                                    )}
-                                    <div className="flex flex-col sm:flex-row gap-2">
-                                        <Button
-                                            className="flex-1 h-12 rounded-xl font-bold gap-2"
-                                            onClick={handleBookService}
-                                            disabled={
-                                                createBooking.isPending ||
-                                                !bookingDate ||
-                                                (hasSlots && !selectedSlot)
-                                            }
-                                        >
-                                            <Calendar size={18} />
-                                            {createBooking.isPending ? "Booking..." : "Confirm booking"}
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            className="flex-1 h-12 rounded-xl font-bold gap-2"
-                                            onClick={() => handlePurchase()}
-                                            disabled={createOrder.isPending}
-                                        >
-                                            <FileText size={18} />
-                                            {createOrder.isPending ? "Sending..." : "Request quotation"}
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )}
+                        {/* Service booking UI is shown in the right column to avoid duplicate slot pickers. */}
                     </div>
 
                     {/* Right Column: Action Panels */}
@@ -513,15 +432,14 @@ export default function ListingDetail() {
                                     <div className="flex flex-col gap-3">
                                         <Button
                                             className="w-full h-14 rounded-2xl font-bold text-lg shadow-lg shadow-primary/20 gap-2"
-                                            onClick={handleBookService}
+                                                onClick={handleAddServiceToCart}
                                             disabled={
-                                                createBooking.isPending ||
                                                 !bookingDate ||
                                                 (hasSlots && !selectedSlot)
                                             }
                                         >
                                             <Calendar size={20} />
-                                            {createBooking.isPending ? "Booking..." : "Confirm Booking"}
+                                            {"Confirm Booking (to Cart)"}
                                         </Button>
                                         <Button
                                             variant="outline"
@@ -531,15 +449,6 @@ export default function ListingDetail() {
                                         >
                                             <FileText size={20} />
                                             {createOrder.isPending ? "Sending..." : "Request Quotation"}
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            className="w-full h-14 rounded-2xl font-bold text-lg gap-2"
-                                            onClick={handleAddServiceToCart}
-                                            disabled={!bookingDate || (hasSlots && !selectedSlot)}
-                                        >
-                                            <ShoppingCart size={20} />
-                                            Add to Cart
                                         </Button>
                                     </div>
                                 </CardContent>

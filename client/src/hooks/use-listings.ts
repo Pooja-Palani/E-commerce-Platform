@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
+import { useAuthStore } from "@/store/use-auth";
 import { InsertListing, UpdateListingRequest } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { getErrorMessage } from "@/lib/api-error";
@@ -24,7 +25,10 @@ export function useListing(id: string) {
     queryKey: [api.listings.get.path, { id }],
     queryFn: async () => {
       const url = buildUrl(api.listings.get.path, { id });
-      const res = await fetch(url, { credentials: "include" });
+      const useAsUser = useAuthStore.getState().useAsUser;
+      const headers: any = {};
+      if (useAsUser) headers['x-act-as-user'] = '1';
+      const res = await fetch(url, { credentials: "include", headers });
       if (!res.ok) {
         const message = await getErrorMessage(res, "Failed to fetch listing");
         throw new Error(message);
@@ -66,9 +70,12 @@ export function useUpdateListingStock(listingId: string) {
 
   return useMutation({
     mutationFn: async (stockQuantity: number) => {
+      const useAsUser = useAuthStore.getState().useAsUser;
+      const headers: any = { "Content-Type": "application/json" };
+      if (useAsUser) headers['x-act-as-user'] = '1';
       const res = await fetch(`/api/listings/${listingId}/stock`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ stockQuantity }),
         credentials: "include",
       });
@@ -93,9 +100,13 @@ export function useCreateProductInterest(listingId: string) {
 
   return useMutation({
     mutationFn: async () => {
+      const useAsUser = useAuthStore.getState().useAsUser;
+      const headers: any = {};
+      if (useAsUser) headers['x-act-as-user'] = '1';
       const res = await fetch(`/api/listings/${listingId}/interest`, {
         method: "POST",
         credentials: "include",
+        headers,
       });
       if (!res.ok) {
         const message = await getErrorMessage(res, "Failed to express interest");
@@ -115,7 +126,10 @@ export function useProductInterestCount(listingId: string, enabled = true) {
   return useQuery({
     queryKey: ["/api/listings", listingId, "interest-count"],
     queryFn: async () => {
-      const res = await fetch(`/api/listings/${listingId}/interest-count`, { credentials: "include" });
+        const useAsUser = useAuthStore.getState().useAsUser;
+        const headers: any = {};
+        if (useAsUser) headers['x-act-as-user'] = '1';
+        const res = await fetch(`/api/listings/${listingId}/interest-count`, { credentials: "include", headers });
       if (!res.ok) return { count: 0 };
       return res.json();
     },

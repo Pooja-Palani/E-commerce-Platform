@@ -16,7 +16,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { useLocation, useParams, Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { useUserCommunities } from "@/hooks/use-communities";
+import { useUserCommunities, useCommunities } from "@/hooks/use-communities";
 import { useUpdateUser } from "@/hooks/use-users";
 import { Loader2, ArrowLeft, FileText } from "lucide-react";
 import { ImagePicker } from "@/components/image-picker";
@@ -37,9 +37,19 @@ export default function ListProduct() {
     const { data: existingListing, isLoading: loadingListing } = useListing(editingListingId || "");
     const updateListing = useUpdateListing();
 
-    const communities = (userCommunities ?? [])
+    const { data: allCommunities } = useCommunities();
+    let communities = (userCommunities ?? [])
         .filter((m: { joinStatus: string }) => m.joinStatus === "ACTIVE")
         .map((m: { community: { id: string; name: string; parentId?: string | null } }) => m.community);
+
+    // Ensure managers/admins can list to their assigned community even without ACTIVE membership
+    if ((user?.role === "COMMUNITY_MANAGER" || user?.role === "ADMIN") && user?.communityId) {
+        const exists = communities.some((c: any) => c.id === user.communityId);
+        if (!exists) {
+            const managed = allCommunities?.find((c: any) => c.id === user.communityId);
+            if (managed) communities = [managed, ...communities];
+        }
+    }
 
     const form = useForm({
         resolver: zodResolver(insertListingSchema.extend({
@@ -139,7 +149,7 @@ export default function ListProduct() {
             return res.json();
         },
         onSuccess: () => {
-            toast({ title: "Listing submitted", description: "Your listing will go live after your community manager approves it." });
+            toast({ title: "Product listed", description: "Your product is now live in the community." });
             queryClient.invalidateQueries({ queryKey: ["/api/my-listings"] });
             setLocation("/my-products");
         },

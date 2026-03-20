@@ -13,10 +13,15 @@ import { format } from "date-fns";
 export default function MyActivity() {
     const { data: bookings, isLoading: loadingBookings } = useQuery<any[]>({
         queryKey: [api.bookings.list.path],
+        // Ensure fresh state after cart checkout / coupon redemption navigation.
+        refetchOnMount: true,
+        staleTime: 0,
     });
 
     const { data: orders, isLoading: loadingOrders } = useQuery<any[]>({
         queryKey: [api.orders.list.path],
+        refetchOnMount: true,
+        staleTime: 0,
     });
 
     const { data: listings } = useListings();

@@ -2,6 +2,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 import { ReactNode, useEffect } from "react";
 import { useAuthStore } from "@/store/use-auth";
+import { useCommunities } from "@/hooks/use-communities";
 import { useCartStore } from "@/store/use-cart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,23 @@ export function Layout({ children }: { children: ReactNode }) {
   useEffect(() => {
     useCartStore.getState().ensureUserCart(user?.id ?? null);
   }, [user?.id]);
+
+  // Apply community theme color as CSS variables on the document element
+  const { data: communities } = useCommunities();
+  const userCommunity = communities?.find((c: any) => c.id === user?.communityId);
+  useEffect(() => {
+    const root = document.documentElement;
+    const color = userCommunity?.themeColor || "#6366f1";
+    root.style.setProperty("--community-color", color);
+    // derive a faded/transparent variant for backgrounds
+    root.style.setProperty("--community-color-20", `${color}33`);
+    root.style.setProperty("--community-color-10", `${color}1a`);
+    return () => {
+      root.style.removeProperty("--community-color");
+      root.style.removeProperty("--community-color-20");
+      root.style.removeProperty("--community-color-10");
+    };
+  }, [userCommunity?.id, userCommunity?.themeColor]);
 
   if (!user) {
     return <Redirect to="/login" />;

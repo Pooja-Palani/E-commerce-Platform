@@ -1,5 +1,5 @@
 /**
- * Seed sample data: communities, subcommunities, users, managers, and listings.
+ * Seed sample data: communities, shops, users, managers, and listings.
  *
  * Run from project root:
  *   npx tsx script/seed-sample-data.ts
@@ -25,7 +25,7 @@ async function main() {
 
   console.log("Seeding sample communities, users, and listings...");
 
-  // 1. Communities & subcommunities
+  // 1. Communities & shops
   const [dlfThalambur] = await db
     .insert(communities)
     .values({
@@ -47,7 +47,7 @@ async function main() {
       parentId: dlfThalambur.id,
       locality: "Thalambur",
       address: "Tower A, DLF Thalambur",
-      description: "Tower A subcommunity",
+      description: "Tower A shop",
       contactEmail: "tower-a@example.com",
       contactPhone: "0000000001",
     })
@@ -60,7 +60,7 @@ async function main() {
       parentId: dlfThalambur.id,
       locality: "Thalambur",
       address: "Tower B, DLF Thalambur",
-      description: "Tower B subcommunity",
+      description: "Tower B shop",
       contactEmail: "tower-b@example.com",
       contactPhone: "0000000002",
     })

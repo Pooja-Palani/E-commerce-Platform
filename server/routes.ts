@@ -8,8 +8,21 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { db } from "./db";
-import { users, userCommunities, communities, insertListingSchema } from "@shared/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import {
+  users,
+  userCommunities,
+  communities,
+  insertListingSchema,
+  couponRequests,
+  coupons,
+  couponRedemptions,
+  couponRequestLedger,
+  listings,
+  listingSlots,
+  bookings,
+  orders,
+} from "@shared/schema";
+import { eq, and, inArray, sql, gt, gte } from "drizzle-orm";
 import { upload } from "./upload";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-for-dev-only";
@@ -18,6 +31,36 @@ const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 const communityPostCooldownByUser = new Map<string, number>();
 const COMMUNITY_POST_COOLDOWN_MS = 30_000;
+
+async function hasApprovedCommunityMembership(user: { id: string; communityId?: string | null; status?: string | null }) {
+  const memberships = await storage.getUserCommunities(user.id);
+  const activeCommunityIds = new Set(
+    memberships
+      .filter((membership) => membership.status === "ACTIVE")
+      .map((membership) => membership.communityId)
+  );
+
+  if (user.communityId && user.status === "ACTIVE") {
+    activeCommunityIds.add(user.communityId);
+  }
+
+  return activeCommunityIds.size > 0;
+}
+
+async function shouldRequireCommunityApproval(
+  user: { id: string; role?: string | null; communityId?: string | null; status?: string | null },
+  community: { visibility?: string | null } | null | undefined,
+) {
+  if (user.role !== "RESIDENT") {
+    return false;
+  }
+
+  if (community?.visibility === "PRIVATE") {
+    return true;
+  }
+
+  return !(await hasApprovedCommunityMembership(user));
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -52,11 +95,8 @@ export async function registerRoutes(
 
       const inviteCommunityId = (input as any).inviteCommunityId;
       const community = inviteCommunityId ? await storage.getCommunity(inviteCommunityId) : null;
-      // Newly onboarded users: no community = PENDING until they join & get approved.
-      // With invite: public = PENDING (approval required); private = ACTIVE (invite = pre-approval).
-      const isPublicInvite = community?.visibility === "PUBLIC";
-      const hasInvite = inviteCommunityId && community;
-      const needsApproval = hasInvite ? isPublicInvite : true; // No invite = no community yet = PENDING
+      // New residents always require approval for their first community.
+      const needsApproval = true;
       const userStatus = needsApproval ? "PENDING" : "ACTIVE";
       const user = await storage.createUser({
         fullName: input.fullName,
@@ -381,14 +421,9 @@ export async function registerRoutes(
       const community = await storage.getCommunity(communityId);
       if (!community) return res.status(404).json({ message: "Community not found" });
 
-      // Private: always require manager approval. Public: user in another community → no approval; user in no community → approval required.
-      const isPublic = community.visibility === "PUBLIC";
-      const userCommunities = await storage.getUserCommunities(user.id);
-      const otherActive = userCommunities.filter((uc) => uc.communityId !== communityId && uc.status === "ACTIVE");
-      const hasAnyOtherCommunity = (user.communityId != null && user.communityId !== communityId) || otherActive.length > 0;
-      const isNewlyOnboarded = !hasAnyOtherCommunity;
-
-      const needsApproval = !isPublic || (isPublic && isNewlyOnboarded);
+      // Public communities need approval only for the resident's first ACTIVE community.
+      // Private communities always need approval for residents.
+      const needsApproval = await shouldRequireCommunityApproval(user, community);
       const membershipStatus = needsApproval ? "PENDING" : "ACTIVE";
       const userStatus = needsApproval ? "PENDING" : "ACTIVE";
 
@@ -595,13 +630,11 @@ export async function registerRoutes(
         await storage.updateCommunityInvite(invite.id, "REJECTED");
         return res.status(400).json({ message: "You are already in this community" });
       }
-      // Same approval logic: user in another community → no approval; user in no community → approval needed for PUBLIC
+      // Same approval logic as direct join:
+      // public communities only require approval for the first ACTIVE membership,
+      // while private communities always require approval for residents.
       const community = await storage.getCommunity(invite.communityId);
-      const userCommunities = await storage.getUserCommunities(req.user.id);
-      const otherActive = userCommunities.filter((c) => c.communityId !== invite.communityId && c.status === "ACTIVE");
-      const hasAnyOtherCommunity = (req.user.communityId && req.user.communityId !== invite.communityId) || otherActive.length > 0;
-      const isPublic = community?.visibility === "PUBLIC";
-      const needsApproval = isPublic && !hasAnyOtherCommunity;
+      const needsApproval = await shouldRequireCommunityApproval(req.user, community);
       const membershipStatus = needsApproval ? "PENDING" : "ACTIVE";
       const userStatus = needsApproval ? "PENDING" : "ACTIVE";
       if (uc) await storage.updateUserCommunity(uc.id, membershipStatus);
@@ -726,18 +759,15 @@ export async function registerRoutes(
     try {
       const allListings = await storage.getListings();
       const user = req.user;
-      let filtered = allListings;
-      if (user.role === "RESIDENT") {
-        // PENDING users have no ACTIVE community membership - block marketplace access
-        if (user.status === "PENDING") {
-          filtered = [];
-        } else {
-          const userCommunitiesList = await storage.getUserCommunities(user.id);
-          const userCommunityIds = new Set<string>();
-          userCommunitiesList.filter(uc => uc.status === "ACTIVE").forEach(uc => userCommunityIds.add(uc.communityId));
-          filtered = allListings.filter(l => userCommunityIds.has(l.communityId));
-        }
+
+      // ALL roles only see listings from their currently selected (active) community.
+      // If user has no communityId set, they see nothing.
+      const activeCommunityId = user.communityId;
+      if (!activeCommunityId) {
+        return res.status(200).json([]);
       }
+
+      const filtered = allListings.filter(l => l.communityId === activeCommunityId);
       res.status(200).json(filtered);
     } catch (err) {
       console.error("GET listings error:", err);
@@ -759,7 +789,8 @@ export async function registerRoutes(
 
     const user = req.user;
 
-    if (user.role === "RESIDENT") {
+    const actingAsUser = String(req.headers['x-act-as-user'] || req.headers['x-act-as-user'] === true) === '1' || String(req.headers['x-act-as-user']) === 'true';
+    if (user.role === "RESIDENT" || actingAsUser) {
       if (user.status === "PENDING") return res.status(403).json({ message: "Your community membership is pending approval. You'll have access once approved." });
       const userCommunitiesList = await storage.getUserCommunities(user.id);
       const userCommunityIds = new Set<string>();
@@ -980,6 +1011,7 @@ export async function registerRoutes(
       }
 
       // Promoting to COMMUNITY_MANAGER or ADMIN automatically activates the user
+      // when performed by an administrator — community managers should not remain pending.
       if (input.role && (input.role === "COMMUNITY_MANAGER" || input.role === "ADMIN")) {
         input.status = "ACTIVE";
       }
@@ -1692,8 +1724,8 @@ export async function registerRoutes(
       if (user.role !== "COMMUNITY_MANAGER" && user.role !== "ADMIN") {
         return res.status(403).json({ message: "Forbidden" });
       }
-      const pending = await storage.getPendingListings(user.communityId);
-      res.status(200).json(pending);
+      // Listing approval flow is disabled in this deployment; return empty list.
+      res.status(200).json([]);
     } catch (err) {
       res.status(500).json({ message: "Error fetching pending listings" });
     }
@@ -1705,13 +1737,8 @@ export async function registerRoutes(
       if (user.role !== "COMMUNITY_MANAGER" && user.role !== "ADMIN") {
         return res.status(403).json({ message: "Forbidden" });
       }
-      const listing = await storage.getListing(req.params.id);
-      if (!listing || listing.communityId !== user.communityId || listing.status !== "PENDING_APPROVAL") {
-        return res.status(404).json({ message: "Listing not found or not pending approval" });
-      }
-      const updated = await storage.updateListing(listing.id, { status: "ACTIVE", version: listing.version });
-      if (!updated) return res.status(409).json({ message: "Conflict" });
-      res.status(200).json(updated);
+      // Listing approval flow is disabled; nothing to approve.
+      return res.status(400).json({ message: "Listing approval is disabled" });
     } catch (err) {
       res.status(500).json({ message: "Error approving listing" });
     }
@@ -1723,13 +1750,8 @@ export async function registerRoutes(
       if (user.role !== "COMMUNITY_MANAGER" && user.role !== "ADMIN") {
         return res.status(403).json({ message: "Forbidden" });
       }
-      const listing = await storage.getListing(req.params.id);
-      if (!listing || listing.communityId !== user.communityId || listing.status !== "PENDING_APPROVAL") {
-        return res.status(404).json({ message: "Listing not found or not pending approval" });
-      }
-      const updated = await storage.updateListing(listing.id, { status: "INACTIVE", version: listing.version });
-      if (!updated) return res.status(409).json({ message: "Conflict" });
-      res.status(200).json(updated);
+      // Listing approval flow is disabled; nothing to reject.
+      return res.status(400).json({ message: "Listing approval is disabled" });
     } catch (err) {
       res.status(500).json({ message: "Error rejecting listing" });
     }
@@ -1772,6 +1794,563 @@ export async function registerRoutes(
     });
 
     res.status(200).json({ message: "Backup routine has been initiated." });
+  });
+
+  // Coupons & discounts
+  const couponRequestSchema = z.object({
+    numberOfCoupons: z.number().int().min(1),
+    perCouponValue: z.number().int().min(1),
+    reason: z.string().min(1),
+    validUntil: z.string().min(1),
+  });
+
+  const couponCartCheckoutSchema = z.object({
+    couponCode: z.string().min(1),
+    paymentMethod: z.enum(["UPI", "CARD", "CASH"]).nullable().optional(),
+    items: z.array(
+      z.object({
+        listingId: z.string().min(1),
+        type: z.enum(["product", "service"]),
+        quantity: z.number().int().min(1).optional(),
+        bookingDate: z.string().optional(),
+        slotStartTime: z.string().optional(),
+        slotEndTime: z.string().optional(),
+        logisticsPreference: z.enum(["PICKUP", "DELIVERY_SUPPORT"]).optional(),
+        deliveryAddress: z.string().optional().nullable(),
+      }),
+    ),
+  });
+
+  const couponCartPreviewSchema = z.object({
+    couponCode: z.string().min(1),
+    items: couponCartCheckoutSchema.shape.items,
+  });
+
+  const parseDateInput = (value: string) => {
+    const s = String(value).trim();
+    // Treat date-only inputs as UTC noon to reduce timezone off-by-one surprises.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(`${s}T12:00:00.000Z`);
+    return new Date(s);
+  };
+
+  const addMonths = (date: Date, months: number) => {
+    const d = new Date(date.getTime());
+    d.setMonth(d.getMonth() + months);
+    return d;
+  };
+
+  const generateCouponCode = () => `QV-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
+
+  app.post("/api/manager/coupons/request", authMiddleware, async (req: any, res) => {
+    try {
+      if (req.user.role !== "COMMUNITY_MANAGER") return res.status(403).json({ message: "Forbidden" });
+      const input = couponRequestSchema.parse(req.body);
+      if (!req.user.communityId) return res.status(400).json({ message: "No community assigned" });
+
+      const now = new Date();
+      const validUntil = parseDateInput(input.validUntil);
+      if (Number.isNaN(validUntil.getTime())) return res.status(400).json({ message: "Invalid validUntil date" });
+
+      const maxValidUntil = addMonths(now, 6);
+      if (validUntil.getTime() > maxValidUntil.getTime()) {
+        return res.status(400).json({ message: "validUntil must be within 6 months from request time" });
+      }
+
+      const couponTotal = input.numberOfCoupons * input.perCouponValue;
+      const adminCommission = Math.round((couponTotal * 12) / 100);
+      const totalPayable = couponTotal + adminCommission;
+
+      const [request] = await db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(couponRequests)
+          .values({
+            communityId: req.user.communityId,
+            managerUserId: req.user.id,
+            numberOfCoupons: input.numberOfCoupons,
+            perCouponValue: input.perCouponValue,
+            couponTotal,
+            commissionRate: 12,
+            adminCommission,
+            totalPayable,
+            reason: input.reason,
+            validUntil,
+            status: "PENDING_ADMIN",
+            updatedAt: now,
+          })
+          .returning();
+
+        await tx.insert(couponRequestLedger).values({
+          requestId: created.id,
+          communityId: created.communityId,
+          userId: req.user.id,
+          type: "DEBIT",
+          amount: totalPayable,
+          reason: "MANAGER_COUPON_REQUEST",
+        });
+
+        return [created];
+      });
+
+      res.status(201).json(request);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0]?.message ?? "Invalid input" });
+      }
+      res.status(500).json({ message: err instanceof Error ? err.message : "Failed to request coupons" });
+    }
+  });
+
+  app.get("/api/manager/coupons/requests", authMiddleware, async (req: any, res) => {
+    try {
+      if (req.user.role !== "COMMUNITY_MANAGER" && req.user.role !== "ADMIN") return res.status(403).json({ message: "Forbidden" });
+
+      const whereStatus = inArray(couponRequests.status, ["PENDING_ADMIN", "APPROVED_NOT_SHARED", "REJECTED"]);
+      const isAdmin = req.user.role === "ADMIN";
+
+      const results = await db
+        .select({
+          request: couponRequests,
+          couponCode: coupons.code,
+          couponStatus: coupons.status,
+          couponRemainingUnits: coupons.remainingUnits,
+          couponExpiresAt: coupons.expiresAt,
+          activatedAt: coupons.activatedAt,
+          sharedAt: coupons.sharedAt,
+          community: communities.name,
+        })
+        .from(couponRequests)
+        .innerJoin(communities, eq(couponRequests.communityId, communities.id))
+        .leftJoin(coupons, eq(coupons.requestId, couponRequests.id))
+        .where(isAdmin ? whereStatus : and(whereStatus, eq(couponRequests.managerUserId, req.user.id)))
+        .orderBy(couponRequests.createdAt);
+
+      res.status(200).json(
+        results.map((r: any) => ({
+          ...r.request,
+          communityName: r.community,
+          coupon: r.couponCode
+            ? {
+                code: r.couponCode,
+                status: r.couponStatus,
+                remainingUnits: r.couponRemainingUnits,
+                expiresAt: r.couponExpiresAt,
+                activatedAt: r.activatedAt,
+                sharedAt: r.sharedAt,
+              }
+            : null,
+        })),
+      );
+    } catch (err) {
+      res.status(500).json({ message: err instanceof Error ? err.message : "Failed to fetch requests" });
+    }
+  });
+
+  app.get("/api/admin/coupons/requests", authMiddleware, async (req: any, res) => {
+    try {
+      if (req.user.role !== "ADMIN") return res.status(403).json({ message: "Forbidden" });
+
+      const results = await db
+        .select({
+          request: couponRequests,
+          community: communities.name,
+          manager: users.fullName,
+          couponCode: coupons.code,
+          couponStatus: coupons.status,
+          couponRemainingUnits: coupons.remainingUnits,
+          couponExpiresAt: coupons.expiresAt,
+          activatedAt: coupons.activatedAt,
+          sharedAt: coupons.sharedAt,
+        })
+        .from(couponRequests)
+        .innerJoin(communities, eq(couponRequests.communityId, communities.id))
+        .innerJoin(users, eq(couponRequests.managerUserId, users.id))
+        .leftJoin(coupons, eq(coupons.requestId, couponRequests.id))
+        .where(
+          inArray(couponRequests.status, ["PENDING_ADMIN", "APPROVED_NOT_SHARED"]),
+        )
+        .orderBy(couponRequests.createdAt);
+
+      res.status(200).json(
+        results.map((r: any) => ({
+          ...r.request,
+          communityName: r.community,
+          managerName: r.manager,
+          coupon: r.couponCode
+            ? {
+                code: r.couponCode,
+                status: r.couponStatus,
+                remainingUnits: r.couponRemainingUnits,
+                expiresAt: r.couponExpiresAt,
+                activatedAt: r.activatedAt,
+                sharedAt: r.sharedAt,
+              }
+            : null,
+        })),
+      );
+    } catch (err) {
+      res.status(500).json({ message: err instanceof Error ? err.message : "Failed to fetch admin queue" });
+    }
+  });
+
+  app.post("/api/admin/coupons/requests/:id/reject", authMiddleware, async (req: any, res) => {
+    try {
+      if (req.user.role !== "ADMIN") return res.status(403).json({ message: "Forbidden" });
+      const requestId = req.params.id;
+      const now = new Date();
+
+      await db.transaction(async (tx) => {
+        const [request] = await tx.select().from(couponRequests).where(eq(couponRequests.id, requestId)).limit(1);
+        if (!request) throw new Error("Request not found");
+        if (request.status !== "PENDING_ADMIN") throw new Error("Request not in PENDING_ADMIN");
+
+        await tx
+          .update(couponRequests)
+          .set({ status: "REJECTED", updatedAt: now })
+          .where(eq(couponRequests.id, requestId));
+
+        await tx.insert(couponRequestLedger).values({
+          requestId: request.id,
+          communityId: request.communityId,
+          userId: request.managerUserId,
+          type: "CREDIT",
+          amount: request.totalPayable,
+          reason: "ADMIN_COUPON_REJECT",
+        });
+      });
+
+      res.status(200).json({ message: "Request rejected and refund reserved in ledger" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Reject failed";
+      if (msg === "Request not found") return res.status(404).json({ message: msg });
+      if (msg === "Request not in PENDING_ADMIN") return res.status(400).json({ message: msg });
+      return res.status(500).json({ message: msg });
+    }
+  });
+
+  app.post("/api/admin/coupons/requests/:id/approve", authMiddleware, async (req: any, res) => {
+    try {
+      if (req.user.role !== "ADMIN") return res.status(403).json({ message: "Forbidden" });
+      const requestId = req.params.id;
+      const now = new Date();
+
+      const result = await db.transaction(async (tx) => {
+        const [request] = await tx.select().from(couponRequests).where(eq(couponRequests.id, requestId)).limit(1);
+        if (!request) throw new Error("Request not found");
+        if (request.status !== "PENDING_ADMIN") throw new Error("Request not in PENDING_ADMIN");
+
+        let code = generateCouponCode();
+        let inserted: any = null;
+
+        for (let i = 0; i < 5; i++) {
+          try {
+            const [c] = await tx
+              .insert(coupons)
+              .values({
+                requestId: request.id,
+                communityId: request.communityId,
+                code,
+                perCouponValue: request.perCouponValue,
+                totalUnits: request.numberOfCoupons,
+                remainingUnits: request.numberOfCoupons,
+                expiresAt: request.validUntil,
+                status: "NOT_SHARED",
+                activatedAt: null,
+                sharedAt: null,
+              })
+              .returning();
+            inserted = c;
+            break;
+          } catch {
+            code = generateCouponCode();
+          }
+        }
+
+        if (!inserted) throw new Error("Failed to generate unique coupon code");
+
+        await tx
+          .update(couponRequests)
+          .set({ status: "APPROVED_NOT_SHARED", updatedAt: now })
+          .where(eq(couponRequests.id, requestId));
+
+        return { requestId: request.id, couponCode: inserted.code };
+      });
+
+      res.status(200).json(result);
+    } catch (err) {
+      res.status(400).json({ message: err instanceof Error ? err.message : "Approve failed" });
+    }
+  });
+
+  app.post("/api/admin/coupons/requests/:id/share", authMiddleware, async (req: any, res) => {
+    try {
+      if (req.user.role !== "ADMIN") return res.status(403).json({ message: "Forbidden" });
+      const requestId = req.params.id;
+      const now = new Date();
+
+      const result = await db.transaction(async (tx) => {
+        const [request] = await tx.select().from(couponRequests).where(eq(couponRequests.id, requestId)).limit(1);
+        if (!request) throw new Error("Request not found");
+        if (request.status !== "APPROVED_NOT_SHARED") throw new Error("Request not in APPROVED_NOT_SHARED");
+
+        const [coupon] = await tx.select().from(coupons).where(eq(coupons.requestId, requestId)).limit(1);
+        if (!coupon) throw new Error("Coupon not generated yet");
+
+        if (coupon.status !== "NOT_SHARED") {
+          return { code: coupon.code, status: coupon.status, message: "Coupon already shared/activated" };
+        }
+
+        // If already expired, mark as EXPIRED and don't activate.
+        if (now.getTime() > coupon.expiresAt.getTime()) {
+          await tx
+            .update(coupons)
+            .set({ status: sql`'EXPIRED'::coupon_status`, sharedAt: now })
+            .where(eq(coupons.id, coupon.id));
+          return { code: coupon.code, status: "EXPIRED", message: "Coupon expired; activation skipped" };
+        }
+
+        await tx
+          .update(coupons)
+          .set({ status: sql`'ACTIVE'::coupon_status`, activatedAt: now, sharedAt: now })
+          .where(eq(coupons.id, coupon.id));
+
+        return { code: coupon.code, status: "ACTIVE", message: "Coupon activated (Shared)" };
+      });
+
+      res.status(200).json(result);
+    } catch (err) {
+      res.status(400).json({ message: err instanceof Error ? err.message : "Share failed" });
+    }
+  });
+
+  app.post("/api/checkout/cart-with-coupon", authMiddleware, async (req: any, res) => {
+    try {
+      if (req.user.status === "PENDING") return res.status(403).json({ message: "Your community membership is pending approval." });
+
+      const input = couponCartCheckoutSchema.parse(req.body);
+      const now = new Date();
+
+      const result = await db.transaction(async (tx) => {
+        // Validate coupon and consume 1 unit (exactly once per checkout).
+        const [coupon] = await tx.select().from(coupons).where(eq(coupons.code, input.couponCode)).limit(1);
+        if (!coupon) throw new Error("Invalid coupon code");
+        if (coupon.status !== "ACTIVE") throw new Error("Coupon is not active");
+        if (now.getTime() > coupon.expiresAt.getTime()) {
+          await tx.update(coupons).set({ status: sql`'EXPIRED'::coupon_status` }).where(eq(coupons.id, coupon.id));
+          throw new Error("Coupon expired");
+        }
+
+        const existingRedemption = await tx
+          .select()
+          .from(couponRedemptions)
+          .where(and(eq(couponRedemptions.couponId, coupon.id), eq(couponRedemptions.userId, req.user.id)))
+          .limit(1);
+        if (existingRedemption.length > 0) throw new Error("Coupon already redeemed by you");
+
+        const remainingCouponUpdate = await tx
+          .update(coupons)
+          .set({
+            remainingUnits: sql`${coupons.remainingUnits} - 1`,
+            status: sql`CASE WHEN ${coupons.remainingUnits} - 1 <= 0 THEN 'EXPIRED'::coupon_status ELSE 'ACTIVE'::coupon_status END`,
+          })
+          .where(
+            and(
+              eq(coupons.id, coupon.id),
+              eq(coupons.status, sql`'ACTIVE'::coupon_status`),
+              gt(coupons.remainingUnits, 0),
+              gte(coupons.expiresAt, now),
+            ),
+          )
+          .returning({ id: coupons.id, remainingUnits: coupons.remainingUnits, perCouponValue: coupons.perCouponValue });
+
+        if (remainingCouponUpdate.length === 0) {
+          throw new Error("Coupon is exhausted or no longer valid");
+        }
+
+        await tx.insert(couponRedemptions).values({
+          couponId: coupon.id,
+          userId: req.user.id,
+        });
+
+        // Create bookings/orders and apply discount across priced records sequentially.
+        let discountRemaining = coupon.perCouponValue;
+        const createdBookings: any[] = [];
+        const createdOrders: any[] = [];
+
+        for (const item of input.items) {
+          const [listing] = await tx.select().from(listings).where(eq(listings.id, item.listingId)).limit(1);
+          if (!listing) throw new Error(`Listing not found: ${item.listingId}`);
+          if (listing.sellerId === req.user.id) throw new Error("You cannot purchase your own listing");
+
+          if (item.type === "service") {
+            if (listing.listingType !== "SERVICE") throw new Error("Cart item type mismatch");
+
+            const dateStr = item.bookingDate || new Date().toISOString().split("T")[0];
+            const bookingDate =
+              /^\d{4}-\d{2}-\d{2}$/.test(String(dateStr))
+                ? new Date(`${dateStr}T12:00:00.000Z`)
+                : new Date(dateStr);
+
+            const slots = await tx.select().from(listingSlots).where(eq(listingSlots.listingId, listing.id));
+            const slotStartTime = item.slotStartTime ?? null;
+            const slotEndTime = item.slotEndTime ?? null;
+
+            if (slots.length > 0) {
+              if (!slotStartTime || !slotEndTime) {
+                throw new Error("Slot is required for this service");
+              }
+
+              const dateStrForQuery = String(dateStr).includes("T") ? String(dateStr).split("T")[0] : String(dateStr);
+              const allBookings = await tx.select().from(bookings).where(eq(bookings.listingId, listing.id));
+              const bookedOnDate = allBookings.filter((b: any) => {
+                const d = new Date(b.bookingDate);
+                const bookingDateStr = d.toISOString().split("T")[0];
+                return bookingDateStr === dateStrForQuery && b.status !== "CANCELLED";
+              });
+
+              const isAlreadyBooked = bookedOnDate.some(
+                (b: any) => b.slotStartTime === slotStartTime && b.slotEndTime === slotEndTime,
+              );
+              if (isAlreadyBooked) throw new Error("This slot is no longer available");
+
+              const slotExists = slots.some((s: any) => s.startTime === slotStartTime && s.endTime === slotEndTime);
+              if (!slotExists) throw new Error("Invalid slot");
+            }
+
+            const basePrice = Number(listing.price) || 0;
+            if (basePrice > 0 && !input.paymentMethod) throw new Error("Select a payment method");
+            const discountApplied = basePrice > 0 && discountRemaining > 0 ? Math.min(discountRemaining, basePrice) : 0;
+            const finalPrice = basePrice - discountApplied;
+            discountRemaining -= discountApplied;
+
+            const [booking] = await tx
+              .insert(bookings)
+              .values({
+                listingId: listing.id,
+                userId: req.user.id,
+                sellerId: listing.sellerId,
+                bookingDate,
+                slotStartTime,
+                slotEndTime,
+                status: "PENDING",
+                priceSnapshot: finalPrice,
+              })
+              .returning();
+
+            createdBookings.push(booking);
+          } else {
+            if (listing.listingType !== "PRODUCT") throw new Error("Cart item type mismatch");
+
+            const quantity = item.quantity ?? 1;
+            if (!quantity || quantity < 1) throw new Error("Invalid quantity");
+
+            // Update product stock only for stock-limited listings and fixed-price purchases.
+            if (listing.availabilityBasis === "STOCK" && listing.buyNowEnabled) {
+              const currentStock = Number(listing.stockQuantity ?? 0);
+              if (currentStock <= 0) throw new Error("This product is out of stock.");
+              if (quantity > currentStock) throw new Error(`Only ${currentStock} items available.`);
+              await tx
+                .update(listings)
+                .set({ stockQuantity: currentStock - quantity })
+                .where(eq(listings.id, listing.id));
+            }
+
+            const basePrice = listing.buyNowEnabled ? Number(listing.price) * quantity : 0;
+            if (basePrice > 0 && !input.paymentMethod) throw new Error("Select a payment method");
+            const discountApplied = basePrice > 0 && discountRemaining > 0 ? Math.min(discountRemaining, basePrice) : 0;
+            const finalPrice = basePrice - discountApplied;
+            discountRemaining -= discountApplied;
+
+            const [order] = await tx
+              .insert(orders)
+              .values({
+                listingId: listing.id,
+                userId: req.user.id,
+                sellerId: listing.sellerId,
+                quantity,
+                status: "PENDING",
+                priceSnapshot: finalPrice,
+                logisticsPreference: (item.logisticsPreference ?? "PICKUP") as any,
+                deliveryAddress: item.deliveryAddress ?? null,
+              })
+              .returning();
+
+            createdOrders.push(order);
+          }
+        }
+
+        return {
+          createdBookings: createdBookings.map((b) => ({ id: b.id, listingId: b.listingId, priceSnapshot: b.priceSnapshot })),
+          createdOrders: createdOrders.map((o) => ({ id: o.id, listingId: o.listingId, priceSnapshot: o.priceSnapshot })),
+          couponCode: coupon.code,
+          discountApplied: coupon.perCouponValue - discountRemaining,
+          discountRemaining,
+        };
+      });
+
+      res.status(201).json(result);
+    } catch (err) {
+      res.status(400).json({ message: err instanceof Error ? err.message : "Checkout failed" });
+    }
+  });
+
+  app.post("/api/checkout/preview-cart-with-coupon", authMiddleware, async (req: any, res) => {
+    try {
+      if (req.user.status === "PENDING") return res.status(403).json({ message: "Your community membership is pending approval." });
+
+      const input = couponCartPreviewSchema.parse(req.body);
+      const now = new Date();
+
+      const result = await db.transaction(async (tx) => {
+        const [coupon] = await tx.select().from(coupons).where(eq(coupons.code, input.couponCode)).limit(1);
+        if (!coupon) throw new Error("Invalid coupon code");
+        if (coupon.status !== "ACTIVE") throw new Error("Coupon is not active");
+        if (now.getTime() > coupon.expiresAt.getTime()) throw new Error("Coupon expired");
+        if (coupon.remainingUnits <= 0) throw new Error("Coupon is exhausted");
+
+        const existingRedemption = await tx
+          .select()
+          .from(couponRedemptions)
+          .where(and(eq(couponRedemptions.couponId, coupon.id), eq(couponRedemptions.userId, req.user.id)))
+          .limit(1);
+        if (existingRedemption.length > 0) throw new Error("Coupon already redeemed by you");
+
+        let discountRemaining = coupon.perCouponValue;
+        let discountApplied = 0;
+        let baseSubtotal = 0;
+
+        for (const item of input.items) {
+          const [listing] = await tx.select().from(listings).where(eq(listings.id, item.listingId)).limit(1);
+          if (!listing) throw new Error(`Listing not found: ${item.listingId}`);
+
+          if (item.type === "service") {
+            if (listing.listingType !== "SERVICE") throw new Error("Cart item type mismatch");
+            const basePrice = Number(listing.price) || 0;
+            baseSubtotal += basePrice;
+            const applied = basePrice > 0 && discountRemaining > 0 ? Math.min(discountRemaining, basePrice) : 0;
+            discountRemaining -= applied;
+            discountApplied += applied;
+          } else {
+            if (listing.listingType !== "PRODUCT") throw new Error("Cart item type mismatch");
+            const quantity = item.quantity ?? 1;
+            const basePrice = listing.buyNowEnabled ? Number(listing.price) * quantity : 0;
+            baseSubtotal += basePrice;
+            const applied = basePrice > 0 && discountRemaining > 0 ? Math.min(discountRemaining, basePrice) : 0;
+            discountRemaining -= applied;
+            discountApplied += applied;
+          }
+        }
+
+        const discountedSubtotal = Math.max(0, baseSubtotal - discountApplied);
+        const tax = discountedSubtotal * 0.18;
+        const total = discountedSubtotal + tax;
+
+        return { couponCode: coupon.code, discountApplied, discountedSubtotal, tax, total };
+      });
+
+      res.status(200).json(result);
+    } catch (err) {
+      res.status(400).json({ message: err instanceof Error ? err.message : "Failed to preview coupon" });
+    }
   });
 
   return httpServer;

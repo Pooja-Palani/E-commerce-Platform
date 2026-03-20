@@ -17,7 +17,7 @@ import { api, buildUrl } from "@shared/routes";
 import { useLocation, useParams, Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateUser } from "@/hooks/use-users";
-import { useUserCommunities } from "@/hooks/use-communities";
+import { useUserCommunities, useCommunities } from "@/hooks/use-communities";
 import { useListing, useUpdateListing } from "@/hooks/use-listings";
 import { Loader2, ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
@@ -35,9 +35,19 @@ export default function ListService() {
     const queryClient = useQueryClient();
     const updateUser = useUpdateUser();
     const { data: userCommunities } = useUserCommunities(user?.id ?? "");
-    const communities = (userCommunities ?? [])
+    const { data: allCommunities } = useCommunities();
+    let communities = (userCommunities ?? [])
         .filter((m: { joinStatus: string }) => m.joinStatus === "ACTIVE")
         .map((m: { community: { id: string; name: string; parentId?: string | null } }) => m.community);
+
+    // If user is a manager or admin and has an assigned community, ensure it's available to list into
+    if ((user?.role === "COMMUNITY_MANAGER" || user?.role === "ADMIN") && user?.communityId) {
+        const exists = communities.some((c: any) => c.id === user.communityId);
+        if (!exists) {
+            const managed = allCommunities?.find((c: any) => c.id === user.communityId);
+            if (managed) communities = [managed, ...communities];
+        }
+    }
     const { data: existingListing, isLoading: loadingListing } = useListing(editingListingId || "");
     const updateListing = useUpdateListing();
 
@@ -158,7 +168,7 @@ export default function ListService() {
             return listing;
         },
         onSuccess: () => {
-            toast({ title: "Listing submitted", description: "Your listing will go live after your community manager approves it." });
+            toast({ title: "Service listed", description: "Your service is now available in the community." });
             queryClient.invalidateQueries({ queryKey: ["/api/my-listings"] });
             setLocation("/my-services");
         }

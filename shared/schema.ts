@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, boolean, integer, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, boolean, integer, timestamp, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -161,6 +161,84 @@ export const orders = pgTable("orders", {
   version: integer("version").default(1).notNull(),
 });
 
+// Coupons & discounting
+export const couponRequestStatusEnum = pgEnum("coupon_request_status", [
+  "PENDING_PAYMENT",
+  "PENDING_ADMIN",
+  "APPROVED_NOT_SHARED",
+  "REJECTED",
+]);
+
+export const couponStatusEnum = pgEnum("coupon_status", ["NOT_SHARED", "ACTIVE", "EXPIRED"]);
+
+export const couponLedgerTypeEnum = pgEnum("coupon_request_ledger_type", ["DEBIT", "CREDIT"]);
+
+export const couponRequests = pgTable("coupon_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  communityId: varchar("community_id").notNull(),
+  managerUserId: varchar("manager_user_id").notNull(),
+  numberOfCoupons: integer("number_of_coupons").notNull(),
+  perCouponValue: integer("per_coupon_value").notNull(),
+  couponTotal: integer("coupon_total").notNull(),
+
+  commissionRate: integer("commission_rate").notNull().default(12),
+  adminCommission: integer("admin_commission").notNull(),
+  totalPayable: integer("total_payable").notNull(),
+
+  reason: text("reason").notNull(),
+  validUntil: timestamp("valid_until").notNull(),
+
+  status: couponRequestStatusEnum("status").notNull().default("PENDING_ADMIN"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const coupons = pgTable("coupons", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  requestId: varchar("request_id").notNull(),
+  communityId: varchar("community_id").notNull(),
+  code: varchar("code").notNull().unique(),
+  perCouponValue: integer("per_coupon_value").notNull(),
+
+  totalUnits: integer("total_units").notNull(),
+  remainingUnits: integer("remaining_units").notNull(),
+
+  expiresAt: timestamp("expires_at").notNull(),
+  status: couponStatusEnum("status").notNull().default("NOT_SHARED"),
+
+  sharedAt: timestamp("shared_at"),
+  activatedAt: timestamp("activated_at"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  version: integer("version").default(1).notNull(),
+});
+
+export const couponRedemptions = pgTable(
+  "coupon_redemptions",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    couponId: varchar("coupon_id").notNull(),
+    userId: varchar("user_id").notNull(),
+    redeemedAt: timestamp("redeemed_at").defaultNow().notNull(),
+    checkoutId: varchar("checkout_id"),
+  },
+  (t) => ({
+    couponUserUnique: uniqueIndex("coupon_redemptions_coupon_id_user_id_unique").on(t.couponId, t.userId),
+  }),
+);
+
+export const couponRequestLedger = pgTable("coupon_request_ledger", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  requestId: varchar("request_id").notNull(),
+  communityId: varchar("community_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  type: couponLedgerTypeEnum("type").notNull(),
+  amount: integer("amount").notNull(),
+  reason: text("reason").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const productInterests = pgTable("product_interests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   listingId: varchar("listing_id").notNull(),
@@ -247,6 +325,11 @@ export const insertPostSchema = createInsertSchema(posts).omit({ id: true, creat
 export const insertCommentSchema = createInsertSchema(comments).omit({ id: true, createdAt: true });
 export const insertReportSchema = createInsertSchema(reports).omit({ id: true, createdAt: true });
 
+export const insertCouponRequestSchema = createInsertSchema(couponRequests).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertCouponSchema = createInsertSchema(coupons).omit({ id: true, createdAt: true, version: true });
+export const insertCouponRedemptionSchema = createInsertSchema(couponRedemptions).omit({ id: true, redeemedAt: true });
+export const insertCouponRequestLedgerSchema = createInsertSchema(couponRequestLedger).omit({ id: true, createdAt: true });
+
 export type Community = typeof communities.$inferSelect;
 export type InsertCommunity = z.infer<typeof insertCommunitySchema>;
 
@@ -274,6 +357,18 @@ export type InsertBooking = typeof bookings.$inferInsert;
 
 export type Order = typeof orders.$inferSelect;
 export type InsertOrder = typeof orders.$inferInsert;
+
+export type CouponRequest = typeof couponRequests.$inferSelect;
+export type InsertCouponRequest = z.infer<typeof insertCouponRequestSchema>;
+
+export type Coupon = typeof coupons.$inferSelect;
+export type InsertCoupon = z.infer<typeof insertCouponSchema>;
+
+export type CouponRedemption = typeof couponRedemptions.$inferSelect;
+export type InsertCouponRedemption = z.infer<typeof insertCouponRedemptionSchema>;
+
+export type CouponRequestLedger = typeof couponRequestLedger.$inferSelect;
+export type InsertCouponRequestLedger = z.infer<typeof insertCouponRequestLedgerSchema>;
 
 export type PlatformSettings = typeof platformSettings.$inferSelect;
 export type InsertPlatformSettings = z.infer<typeof insertPlatformSettingsSchema>;
